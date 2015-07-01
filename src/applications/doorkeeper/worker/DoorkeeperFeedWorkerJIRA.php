@@ -54,8 +54,6 @@ final class DoorkeeperFeedWorkerJIRA extends DoorkeeperFeedWorker {
       return;
     }
 
-    $story_text = $this->renderStoryText();
-
     $xobjs = mgroup($xobjs, 'getApplicationDomain');
     foreach ($xobjs as $domain => $xobj_list) {
       $accounts = id(new PhabricatorExternalAccountQuery())
@@ -78,13 +76,14 @@ final class DoorkeeperFeedWorkerJIRA extends DoorkeeperFeedWorker {
       foreach ($xobj_list as $xobj) {
         foreach ($accounts as $account) {
           try {
-            $provider->newJIRAFuture(
-              $account,
-              'rest/api/2/issue/'.$xobj->getObjectID().'/comment',
-              'POST',
-              array(
-                'body' => $story_text,
-              ))->resolveJSON();
+            $jira_key = $xobj->getObjectID();
+
+            if (self::shouldPostComment())
+              $this->postComment($account, $jira_key);
+
+            if (self::shouldPostLink())
+              $this->postLink($account, $jira_key);
+
             break;
           } catch (HTTPFutureResponseStatus $ex) {
             phlog($ex);
@@ -159,6 +158,63 @@ final class DoorkeeperFeedWorkerJIRA extends DoorkeeperFeedWorker {
     $try_users = array_filter($try_users);
 
     return $try_users;
+  }
+
+  private static function shouldPostComment() {
+    return PhabricatorEnv::getEnvConfig('jira.post-comment');
+  }
+
+  private static function shouldPostLink() {
+    return PhabricatorEnv::getEnvConfig('jira.post-link');
+  }
+
+  private function postComment($account, $jira_key) {
+    $provider = $this->getProvider();
+    $object = $this->getStoryObject();
+    $publisher = $this->getPublisher();
+    $uri = $publisher->getObjectURI($object);
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/comment',
+      'POST',
+      array(
+        'body' => $this->renderStoryText()
+      ))->resolveJSON();
+  }
+
+  private function postLink($account, $jira_key) {
+    $provider = $this->getProvider();
+    $object = $this->getStoryObject();
+    $publisher = $this->getPublisher();
+    $uri = $publisher->getObjectURI($object);
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/remotelink',
+      'POST',
+      // format documented at https://developer.atlassian.com/display/JIRADEV/Fields+in+Remote+Issue+Links
+      array(
+        'globalId' => 'phabricatorPhid='.$object->getPHID(),
+        'application' => array(
+          'type' => 'org.phabricator.differential',
+          'name' => 'Differential',
+        ),
+        'relationship' => 'implemented in',
+        'object' => array(
+          'url'     => $uri,
+          'title'   => $object->getMonogram(),
+          'summary' => $object->getTitle(),
+          'icon'    => array(
+            // TODO use Differential gear icon in 16x16, hosted locally
+            'url16x16'  => 'https://secure.phabricator.com/rsrc/image/apple-touch-icon.png',
+            'title'     => 'Revision',
+          ),
+          'status' => array(
+            'resolved' => $publisher->isObjectClosed($object)
+          ),
+        ),
+      ))->resolveJSON();
   }
 
   private function renderStoryText() {
