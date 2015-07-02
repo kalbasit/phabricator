@@ -196,6 +196,7 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
     $object = $this->getStoryObject();
     $publisher = $this->getPublisher();
     $uri = $publisher->getObjectURI($object);
+    $base_uri = PhabricatorEnv::getEnvConfig('phabricator.base-uri');
 
     $provider->newJIRAFuture(
       $account,
@@ -214,8 +215,7 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
           'title'   => $object->getMonogram(),
           'summary' => $object->getTitle(),
           'icon'    => array(
-            // TODO use Differential gear icon in 16x16, hosted locally
-            'url16x16'  => 'https://secure.phabricator.com/rsrc/image/apple-touch-icon.png',
+            'url16x16'  => $base_uri.'rsrc/favicons/favicon-16x16.png',
             'title'     => 'Revision',
           ),
           'status' => array(
