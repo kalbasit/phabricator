@@ -11,6 +11,10 @@ final class PhabricatorJIRAConfigOptions
     return pht('JIRA integration options.');
   }
 
+  public function getGroup() {
+    return 'core';
+  }
+
   public function getOptions() {
 
     return array(
