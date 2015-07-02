@@ -2,29 +2,55 @@
 
 final class HarbormasterBuildStep extends HarbormasterDAO
   implements
+    PhabricatorApplicationTransactionInterface,
     PhabricatorPolicyInterface,
     PhabricatorCustomFieldInterface {
 
   protected $name;
+  protected $description;
   protected $buildPlanPHID;
   protected $className;
   protected $details = array();
-  protected $sequence;
+  protected $sequence = 0;
+  protected $stepAutoKey;
 
   private $buildPlan = self::ATTACHABLE;
   private $customFields = self::ATTACHABLE;
   private $implementation;
 
   public static function initializeNewStep(PhabricatorUser $actor) {
-    return id(new HarbormasterBuildStep());
+    return id(new HarbormasterBuildStep())
+      ->setName('')
+      ->setDescription('');
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'details' => self::SERIALIZATION_JSON,
-      )
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'className' => 'text255',
+        'sequence' => 'uint32',
+        'description' => 'text',
+
+        // T6203/NULLABILITY
+        // This should not be nullable. Current `null` values indicate steps
+        // which predated editable names. These should be backfilled with
+        // default names, then the code for handling `null` shoudl be removed.
+        'name' => 'text255?',
+        'stepAutoKey' => 'text32?',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_plan' => array(
+          'columns' => array('buildPlanPHID'),
+        ),
+        'key_stepautokey' => array(
+          'columns' => array('buildPlanPHID', 'stepAutoKey'),
+          'unique' => true,
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -70,6 +96,33 @@ final class HarbormasterBuildStep extends HarbormasterDAO
     return $this->implementation;
   }
 
+  public function isAutostep() {
+    return ($this->getStepAutoKey() !== null);
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new HarbormasterBuildStepEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new HarbormasterBuildStepTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
+  }
+
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
@@ -77,6 +130,7 @@ final class HarbormasterBuildStep extends HarbormasterDAO
   public function getCapabilities() {
     return array(
       PhabricatorPolicyCapability::CAN_VIEW,
+      PhabricatorPolicyCapability::CAN_EDIT,
     );
   }
 

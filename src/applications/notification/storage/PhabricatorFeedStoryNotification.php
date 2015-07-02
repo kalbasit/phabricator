@@ -7,14 +7,35 @@ final class PhabricatorFeedStoryNotification extends PhabricatorFeedDAO {
   protected $chronologicalKey;
   protected $hasViewed;
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_IDS          => self::IDS_MANUAL,
       self::CONFIG_TIMESTAMPS   => false,
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'chronologicalKey' => 'uint64',
+        'hasViewed' => 'bool',
+        'id' => null,
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'PRIMARY' => null,
+        'userPHID' => array(
+          'columns' => array('userPHID', 'chronologicalKey'),
+          'unique' => true,
+        ),
+        'userPHID_2' => array(
+          'columns' => array('userPHID', 'hasViewed', 'primaryObjectPHID'),
+        ),
+        'key_object' => array(
+          'columns' => array('primaryObjectPHID'),
+        ),
+        'key_chronological' => array(
+          'columns' => array('chronologicalKey'),
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
-  static public function updateObjectNotificationViews(
+  public static function updateObjectNotificationViews(
     PhabricatorUser $user,
     $object_phid) {
 

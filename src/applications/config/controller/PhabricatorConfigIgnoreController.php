@@ -1,7 +1,7 @@
 <?php
 
 final class PhabricatorConfigIgnoreController
-  extends PhabricatorApplicationsController {
+  extends PhabricatorConfigController {
 
   private $verb;
   private $issue;
@@ -13,7 +13,7 @@ final class PhabricatorConfigIgnoreController
 
   public function processRequest() {
     $request = $this->getRequest();
-    $issue_uri = $this->getApplicationURI('issue');
+    $issue_uri = $this->getApplicationURI('issue/'.$this->issue.'/');
 
     if ($request->isDialogFormPost()) {
       $this->manageApplication();
@@ -34,7 +34,7 @@ final class PhabricatorConfigIgnoreController
         'This issue will no longer be suppressed, and will return to its '.
         'rightful place as a global setup warning.');
     } else {
-      throw new Exception('Unrecognized verb: '.$this->verb);
+      throw new Exception(pht('Unrecognized verb: %s', $this->verb));
     }
 
     $dialog = id(new AphrontDialogView())
@@ -59,7 +59,10 @@ final class PhabricatorConfigIgnoreController
     }
 
     PhabricatorConfigEditor::storeNewValue(
-     $config_entry, $list, $this->getRequest());
+      $this->getRequest()->getUser(),
+      $config_entry,
+      $list,
+      PhabricatorContentSource::newFromRequest($this->getRequest()));
   }
 
 }

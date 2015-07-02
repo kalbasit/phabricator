@@ -1,7 +1,9 @@
 <?php
 
 final class ReleephProject extends ReleephDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface {
 
   const DEFAULT_BRANCH_NAMESPACE = 'releeph-releases';
   const SYSTEM_AGENT_USERNAME_PREFIX = 'releeph-agent-';
@@ -21,13 +23,24 @@ final class ReleephProject extends ReleephDAO
   protected $details = array();
 
   private $repository = self::ATTACHABLE;
-  private $arcanistProject = self::ATTACHABLE;
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'details' => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'name' => 'text128',
+        'trunkBranch' => 'text255',
+        'isActive' => 'bool',
+        'arcanistProjectID' => 'id?',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'projectName' => array(
+          'columns' => array('name'),
+          'unique' => true,
+        ),
       ),
     ) + parent::getConfiguration();
   }
@@ -44,23 +57,13 @@ final class ReleephProject extends ReleephDAO
     $components = array(
       '/releeph/product',
       $this->getID(),
-      $path
+      $path,
     );
     return implode('/', $components);
   }
 
   public function setDetail($key, $value) {
     $this->details[$key] = $value;
-    return $this;
-  }
-
-  public function getArcanistProject() {
-    return $this->assertAttached($this->arcanistProject);
-  }
-
-  public function attachArcanistProject(
-    PhabricatorRepositoryArcanistProject $arcanist_project = null) {
-    $this->arcanistProject = $arcanist_project;
     return $this;
   }
 
@@ -110,7 +113,32 @@ final class ReleephProject extends ReleephDAO
     return false;
   }
 
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new ReleephProductEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new ReleephProductTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
+  }
+
+
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
+
 
   public function getCapabilities() {
     return array(

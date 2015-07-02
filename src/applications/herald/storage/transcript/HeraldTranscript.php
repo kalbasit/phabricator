@@ -1,7 +1,9 @@
 <?php
 
 final class HeraldTranscript extends HeraldDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorPolicyInterface,
+    PhabricatorDestructibleInterface {
 
   protected $objectTranscript;
   protected $ruleTranscripts = array();
@@ -14,6 +16,7 @@ final class HeraldTranscript extends HeraldDAO
 
   protected $objectPHID;
   protected $dryRun;
+  protected $garbageCollected = 0;
 
   const TABLE_SAVED_HEADER = 'herald_savedheader';
 
@@ -98,6 +101,26 @@ final class HeraldTranscript extends HeraldDAO
         'conditionTranscripts'  => true,
         'applyTranscripts'      => true,
       ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'time' => 'epoch',
+        'host' => 'text255',
+        'duration' => 'double',
+        'dryRun' => 'bool',
+        'garbageCollected' => 'bool',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_phid' => null,
+        'phid' => array(
+          'columns' => array('phid'),
+          'unique' => true,
+        ),
+        'objectPHID' => array(
+          'columns' => array('objectPHID'),
+        ),
+        'garbageCollected' => array(
+          'columns' => array('garbageCollected', 'time'),
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -160,9 +183,9 @@ final class HeraldTranscript extends HeraldDAO
 
   public function getMetadataMap() {
     return array(
-      'Run At Epoch' => date('F jS, g:i:s A', $this->time),
-      'Run On Host'  => $this->host,
-      'Run Duration' => (int)(1000 * $this->duration).' ms',
+      pht('Run At Epoch') => date('F jS, g:i:s A', $this->time),
+      pht('Run On Host')  => $this->host,
+      pht('Run Duration') => (int)(1000 * $this->duration).' ms',
     );
   }
 
@@ -193,6 +216,18 @@ final class HeraldTranscript extends HeraldDAO
     return pht(
       'To view a transcript, you must be able to view the object the '.
       'transcript is about.');
+  }
+
+
+/* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+      $this->delete();
+    $this->saveTransaction();
   }
 
 

@@ -2,11 +2,13 @@
 
 final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
   implements
+    PhabricatorApplicationTransactionInterface,
     PhabricatorPolicyInterface,
     PhabricatorSubscribableInterface,
     PhabricatorFlaggableInterface,
     PhabricatorTokenReceiverInterface,
-    PhabricatorProjectInterface {
+    PhabricatorProjectInterface,
+    PhabricatorDestructibleInterface {
 
   const RESPONSES_VISIBLE = 0;
   const RESPONSES_VOTERS  = 1;
@@ -42,9 +44,24 @@ final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
       ->setViewPolicy($view_policy);
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'question' => 'text255',
+        'responseVisibility' => 'uint32',
+        'shuffle' => 'uint32',
+        'method' => 'uint32',
+        'description' => 'text',
+        'isClosed' => 'bool',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_phid' => null,
+        'phid' => array(
+          'columns' => array('phid'),
+          'unique' => true,
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -84,6 +101,29 @@ final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
     assert_instances_of($choices, 'PhabricatorSlowvoteChoice');
     $this->viewerChoices[$viewer->getPHID()] = $choices;
     return $this;
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PhabricatorSlowvoteEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PhabricatorSlowvoteTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 
@@ -137,6 +177,28 @@ final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
 
   public function getUsersToNotifyOfTokenGiven() {
     return array($this->getAuthorPHID());
+  }
+
+/* -(  PhabricatorDestructableInterface  )----------------------------------- */
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+      $choices = id(new PhabricatorSlowvoteChoice())->loadAllWhere(
+        'pollID = %d',
+        $this->getID());
+      foreach ($choices as $choice) {
+        $choice->delete();
+      }
+      $options = id(new PhabricatorSlowvoteOption())->loadAllWhere(
+        'pollID = %d',
+        $this->getID());
+      foreach ($options as $option) {
+        $option->delete();
+      }
+      $this->delete();
+    $this->saveTransaction();
   }
 
 }

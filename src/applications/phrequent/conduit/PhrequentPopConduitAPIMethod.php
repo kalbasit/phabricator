@@ -14,21 +14,16 @@ final class PhrequentPopConduitAPIMethod extends PhrequentConduitAPIMethod {
     return self::METHOD_STATUS_UNSTABLE;
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array(
       'objectPHID' => 'phid',
       'stopTime' => 'int',
-      'note' => 'string'
+      'note' => 'string',
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'phid';
-  }
-
-  public function defineErrorTypes() {
-    return array(
-    );
   }
 
   protected function execute(ConduitAPIRequest $request) {

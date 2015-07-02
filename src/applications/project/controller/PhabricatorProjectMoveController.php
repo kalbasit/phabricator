@@ -17,6 +17,8 @@ final class PhabricatorProjectMoveController
     $object_phid = $request->getStr('objectPHID');
     $after_phid = $request->getStr('afterPHID');
     $before_phid = $request->getStr('beforePHID');
+    $order = $request->getStr('order', PhabricatorProjectColumn::DEFAULT_ORDER);
+
 
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
@@ -57,27 +59,35 @@ final class PhabricatorProjectMoveController
       return new Aphront404Response();
     }
 
+    $positions = id(new PhabricatorProjectColumnPositionQuery())
+      ->setViewer($viewer)
+      ->withColumns($columns)
+      ->withObjectPHIDs(array($object_phid))
+      ->execute();
+
     $xactions = array();
 
-    $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_COLUMN;
-
-    $query = id(new PhabricatorEdgeQuery())
-      ->withSourcePHIDs(array($object->getPHID()))
-      ->withEdgeTypes(array($edge_type))
-      ->withDestinationPHIDs(array_keys($columns));
-
-    $query->execute();
-
-    $edge_phids = $query->getDestinationPHIDs();
+    if ($order == PhabricatorProjectColumn::ORDER_NATURAL) {
+      $order_params = array(
+        'afterPHID' => $after_phid,
+        'beforePHID' => $before_phid,
+      );
+    } else {
+      $order_params = array();
+    }
 
     $xactions[] = id(new ManiphestTransaction())
       ->setTransactionType(ManiphestTransaction::TYPE_PROJECT_COLUMN)
-      ->setNewValue(array(
-        'columnPHIDs' => array($column->getPHID()),
-        'projectPHID' => $column->getProjectPHID()))
-      ->setOldValue(array(
-        'columnPHIDs' => $edge_phids,
-        'projectPHID' => $column->getProjectPHID()));
+      ->setNewValue(
+        array(
+          'columnPHIDs' => array($column->getPHID()),
+          'projectPHID' => $column->getProjectPHID(),
+        ) + $order_params)
+      ->setOldValue(
+        array(
+          'columnPHIDs' => mpull($positions, 'getColumnPHID'),
+          'projectPHID' => $column->getProjectPHID(),
+        ));
 
     $task_phids = array();
     if ($after_phid) {
@@ -86,7 +96,8 @@ final class PhabricatorProjectMoveController
     if ($before_phid) {
       $task_phids[] = $before_phid;
     }
-    if ($task_phids) {
+
+    if ($task_phids && ($order == PhabricatorProjectColumn::ORDER_PRIORITY)) {
       $tasks = id(new ManiphestTaskQuery())
         ->setViewer($viewer)
         ->withPHIDs($task_phids)
@@ -101,38 +112,31 @@ final class PhabricatorProjectMoveController
       }
       $tasks = mpull($tasks, null, 'getPHID');
 
-      $a_task = idx($tasks, $after_phid);
-      $b_task = idx($tasks, $before_phid);
+      $try = array(
+        array($after_phid, true),
+        array($before_phid, false),
+      );
 
-      if ($a_task &&
-         (($a_task->getPriority() < $object->getPriority()) ||
-          ($a_task->getPriority() == $object->getPriority() &&
-           $a_task->getSubpriority() >= $object->getSubpriority()))) {
+      $pri = null;
+      $sub = null;
+      foreach ($try as $spec) {
+        list($task_phid, $is_after) = $spec;
+        $task = idx($tasks, $task_phid);
+        if ($task) {
+          list($pri, $sub) = ManiphestTransactionEditor::getAdjacentSubpriority(
+            $task,
+            $is_after);
+          break;
+        }
+      }
 
-        $after_pri = $a_task->getPriority();
-        $after_sub = $a_task->getSubpriority();
-
+      if ($pri !== null) {
+        $xactions[] = id(new ManiphestTransaction())
+          ->setTransactionType(ManiphestTransaction::TYPE_PRIORITY)
+          ->setNewValue($pri);
         $xactions[] = id(new ManiphestTransaction())
           ->setTransactionType(ManiphestTransaction::TYPE_SUBPRIORITY)
-          ->setNewValue(array(
-            'newPriority' => $after_pri,
-            'newSubpriorityBase' => $after_sub,
-            'direction' => '>'));
-
-       } else if ($b_task &&
-                 (($b_task->getPriority() > $object->getPriority()) ||
-                  ($b_task->getPriority() == $object->getPriority() &&
-                   $b_task->getSubpriority() <= $object->getSubpriority()))) {
-
-        $before_pri = $b_task->getPriority();
-        $before_sub = $b_task->getSubpriority();
-
-        $xactions[] = id(new ManiphestTransaction())
-          ->setTransactionType(ManiphestTransaction::TYPE_SUBPRIORITY)
-          ->setNewValue(array(
-            'newPriority' => $before_pri,
-            'newSubpriorityBase' => $before_sub,
-            'direction' => '<'));
+          ->setNewValue($sub);
       }
    }
 

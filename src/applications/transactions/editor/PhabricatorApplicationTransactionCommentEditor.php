@@ -4,6 +4,19 @@ final class PhabricatorApplicationTransactionCommentEditor
   extends PhabricatorEditor {
 
   private $contentSource;
+  private $actingAsPHID;
+
+  public function setActingAsPHID($acting_as_phid) {
+    $this->actingAsPHID = $acting_as_phid;
+    return $this;
+  }
+
+  public function getActingAsPHID() {
+    if ($this->actingAsPHID) {
+      return $this->actingAsPHID;
+    }
+    return $this->getActor()->getPHID();
+  }
 
   public function setContentSource(PhabricatorContentSource $content_source) {
     $this->contentSource = $content_source;
@@ -27,11 +40,17 @@ final class PhabricatorApplicationTransactionCommentEditor
     $actor = $this->requireActor();
 
     $comment->setContentSource($this->getContentSource());
-    $comment->setAuthorPHID($actor->getPHID());
+    $comment->setAuthorPHID($this->getActingAsPHID());
 
     // TODO: This needs to be more sophisticated once we have meta-policies.
     $comment->setViewPolicy(PhabricatorPolicies::POLICY_PUBLIC);
-    $comment->setEditPolicy($actor->getPHID());
+    $comment->setEditPolicy($this->getActingAsPHID());
+
+    $file_phids = PhabricatorMarkupEngine::extractFilePHIDsFromEmbeddedFiles(
+      $actor,
+      array(
+        $comment->getContent(),
+      ));
 
     $xaction->openTransaction();
       $xaction->beginReadLocking();
@@ -50,14 +69,44 @@ final class PhabricatorApplicationTransactionCommentEditor
         $xaction->setViewPolicy($comment->getViewPolicy());
         $xaction->setEditPolicy($comment->getEditPolicy());
         $xaction->save();
+        $xaction->attachComment($comment);
 
+        // For comment edits, we need to make sure there are no automagical
+        // transactions like adding mentions or projects.
+        if ($new_version > 1) {
+          $object = id(new PhabricatorObjectQuery())
+            ->withPHIDs(array($xaction->getObjectPHID()))
+            ->setViewer($this->getActor())
+            ->executeOne();
+          if ($object &&
+              $object instanceof PhabricatorApplicationTransactionInterface) {
+            $editor = $object->getApplicationTransactionEditor();
+            $editor->setActor($this->getActor());
+            $support_xactions = $editor->getExpandedSupportTransactions(
+              $object,
+              $xaction);
+            if ($support_xactions) {
+              $editor
+                ->setContentSource($this->getContentSource())
+                ->setContinueOnNoEffect(true)
+                ->applyTransactions($object, $support_xactions);
+            }
+          }
+        }
       $xaction->endReadLocking();
     $xaction->saveTransaction();
 
-    $xaction->attachComment($comment);
-
-    // TODO: Emit an event for notifications/feed? Can we handle them
-    // generically?
+    // Add links to any files newly referenced by the edit.
+    if ($file_phids) {
+      $editor = new PhabricatorEdgeEditor();
+      foreach ($file_phids as $file_phid) {
+        $editor->addEdge(
+          $xaction->getObjectPHID(),
+          PhabricatorObjectHasFileEdgeType::EDGECONST ,
+          $file_phid);
+      }
+      $editor->save();
+    }
 
     return $this;
   }
@@ -72,20 +121,21 @@ final class PhabricatorApplicationTransactionCommentEditor
 
     if (!$xaction->getPHID()) {
       throw new Exception(
-        'Transaction must have a PHID before calling applyEdit()!');
+        pht(
+          'Transaction must have a PHID before calling %s!',
+          'applyEdit()'));
     }
 
     $type_comment = PhabricatorTransactions::TYPE_COMMENT;
     if ($xaction->getTransactionType() == $type_comment) {
       if ($comment->getPHID()) {
         throw new Exception(
-        'Transaction comment must not yet have a PHID!');
+          pht('Transaction comment must not yet have a PHID!'));
       }
     }
 
     if (!$this->getContentSource()) {
-      throw new Exception(
-        'Call setContentSource() before applyEdit()!');
+      throw new PhutilInvalidStateException('applyEdit');
     }
 
     $actor = $this->requireActor();

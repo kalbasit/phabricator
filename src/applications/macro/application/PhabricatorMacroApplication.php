@@ -14,8 +14,8 @@ final class PhabricatorMacroApplication extends PhabricatorApplication {
     return pht('Image Macros and Memes');
   }
 
-  public function getIconName() {
-    return 'macro';
+  public function getFontIcon() {
+    return 'fa-file-image-o';
   }
 
   public function getTitleGlyph() {
@@ -44,7 +44,8 @@ final class PhabricatorMacroApplication extends PhabricatorApplication {
 
   public function getRemarkupRules() {
     return array(
-      new PhabricatorRemarkupRuleIcon(),
+      new PhabricatorIconRemarkupRule(),
+      new PhabricatorEmojiRemarkupRule(),
     );
   }
 
@@ -52,6 +53,19 @@ final class PhabricatorMacroApplication extends PhabricatorApplication {
     return array(
       PhabricatorMacroManageCapability::CAPABILITY => array(
         'caption' => pht('Allows creating and editing macros.'),
+      ),
+    );
+  }
+
+  public function getMailCommandObjects() {
+    return array(
+      'macro' => array(
+        'name' => pht('Email Commands: Macros'),
+        'header' => pht('Interacting with Macros'),
+        'object' => new PhabricatorFileImageMacro(),
+        'summary' => pht(
+          'This page documents the commands you can use to interact with '.
+          'image macros.'),
       ),
     );
   }

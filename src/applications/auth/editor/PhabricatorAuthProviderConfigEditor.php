@@ -3,6 +3,14 @@
 final class PhabricatorAuthProviderConfigEditor
   extends PhabricatorApplicationTransactionEditor {
 
+  public function getEditorApplicationClass() {
+    return 'PhabricatorAuthApplication';
+  }
+
+  public function getEditorObjectsDescription() {
+    return pht('Auth Providers');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -11,6 +19,7 @@ final class PhabricatorAuthProviderConfigEditor
     $types[] = PhabricatorAuthProviderConfigTransaction::TYPE_LINK;
     $types[] = PhabricatorAuthProviderConfigTransaction::TYPE_UNLINK;
     $types[] = PhabricatorAuthProviderConfigTransaction::TYPE_TRUST_EMAILS;
+    $types[] = PhabricatorAuthProviderConfigTransaction::TYPE_AUTO_LOGIN;
     $types[] = PhabricatorAuthProviderConfigTransaction::TYPE_PROPERTY;
 
     return $types;
@@ -33,8 +42,10 @@ final class PhabricatorAuthProviderConfigEditor
         return (int)$object->getShouldAllowLink();
       case PhabricatorAuthProviderConfigTransaction::TYPE_UNLINK:
         return (int)$object->getShouldAllowUnlink();
-      case PhabricatorAuthProviderConfigTransaction::TYPE_UNLINK:
+      case PhabricatorAuthProviderConfigTransaction::TYPE_TRUST_EMAILS:
         return (int)$object->getShouldTrustEmails();
+      case PhabricatorAuthProviderConfigTransaction::TYPE_AUTO_LOGIN:
+        return (int)$object->getShouldAutoLogin();
       case PhabricatorAuthProviderConfigTransaction::TYPE_PROPERTY:
         $key = $xaction->getMetadataValue(
           PhabricatorAuthProviderConfigTransaction::PROPERTY_KEY);
@@ -52,6 +63,7 @@ final class PhabricatorAuthProviderConfigEditor
       case PhabricatorAuthProviderConfigTransaction::TYPE_LINK:
       case PhabricatorAuthProviderConfigTransaction::TYPE_UNLINK:
       case PhabricatorAuthProviderConfigTransaction::TYPE_TRUST_EMAILS:
+      case PhabricatorAuthProviderConfigTransaction::TYPE_AUTO_LOGIN:
       case PhabricatorAuthProviderConfigTransaction::TYPE_PROPERTY:
         return $xaction->getNewValue();
     }
@@ -72,6 +84,8 @@ final class PhabricatorAuthProviderConfigEditor
         return $object->setShouldAllowUnlink($v);
       case PhabricatorAuthProviderConfigTransaction::TYPE_TRUST_EMAILS:
         return $object->setShouldTrustEmails($v);
+      case PhabricatorAuthProviderConfigTransaction::TYPE_AUTO_LOGIN:
+        return $object->setShouldAutoLogin($v);
       case PhabricatorAuthProviderConfigTransaction::TYPE_PROPERTY:
         $key = $xaction->getMetadataValue(
           PhabricatorAuthProviderConfigTransaction::PROPERTY_KEY);
@@ -96,6 +110,7 @@ final class PhabricatorAuthProviderConfigEditor
       case PhabricatorAuthProviderConfigTransaction::TYPE_LINK:
       case PhabricatorAuthProviderConfigTransaction::TYPE_UNLINK:
       case PhabricatorAuthProviderConfigTransaction::TYPE_TRUST_EMAILS:
+      case PhabricatorAuthProviderConfigTransaction::TYPE_AUTO_LOGIN:
         // For these types, last transaction wins.
         return $v;
     }

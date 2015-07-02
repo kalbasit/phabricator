@@ -2,17 +2,10 @@
 
 final class HarbormasterPlanViewController extends HarbormasterPlanController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $this->getviewer();
 
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    $id = $this->id;
+    $id = $request->getURIData('id');
 
     $plan = id(new HarbormasterBuildPlanQuery())
       ->setViewer($viewer)
@@ -22,21 +15,15 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       return new Aphront404Response();
     }
 
-    $xactions = id(new HarbormasterBuildPlanTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($plan->getPHID()))
-      ->execute();
+    $timeline = $this->buildTransactionTimeline(
+      $plan,
+      new HarbormasterBuildPlanTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
-    $xaction_view = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($plan->getPHID())
-      ->setTransactions($xactions)
-      ->setShouldTerminate(true);
-
-    $title = pht('Plan %d', $id);
+    $title = $plan->getName();
 
     $header = id(new PHUIHeaderView())
-      ->setHeader($title)
+      ->setHeader($plan->getName())
       ->setUser($viewer)
       ->setPolicyObject($plan);
 
@@ -49,9 +36,21 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Plan %d', $id));
 
-    list($step_list, $has_any_conflicts) = $this->buildStepList($plan);
+    list($step_list, $has_any_conflicts, $would_deadlock) =
+      $this->buildStepList($plan);
 
-    if ($has_any_conflicts) {
+    if ($would_deadlock) {
+      $box->setFormErrors(
+        array(
+          pht(
+            'This build plan will deadlock when executed, due to '.
+            'circular dependencies present in the build plan. '.
+            'Examine the step list and resolve the deadlock.'),
+        ));
+    } else if ($has_any_conflicts) {
+      // A deadlocking build will also cause all the artifacts to be
+      // invalid, so we just skip showing this message if that's the
+      // case.
       $box->setFormErrors(
         array(
           pht(
@@ -65,7 +64,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $crumbs,
         $box,
         $step_list,
-        $xaction_view,
+        $timeline,
       ),
       array(
         'title' => $title,
@@ -73,34 +72,45 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
   }
 
   private function buildStepList(HarbormasterBuildPlan $plan) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+    $viewer = $this->getViewer();
 
-    $list_id = celerity_generate_unique_node_id();
+    $run_order = HarbormasterBuildGraph::determineDependencyExecution($plan);
 
     $steps = id(new HarbormasterBuildStepQuery())
       ->setViewer($viewer)
       ->withBuildPlanPHIDs(array($plan->getPHID()))
       ->execute();
+    $steps = mpull($steps, null, 'getPHID');
 
-    $can_edit = $this->hasApplicationCapability(
+    $has_manage = $this->hasApplicationCapability(
       HarbormasterManagePlansCapability::CAPABILITY);
 
-    $i = 1;
+    $has_edit = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $plan,
+      PhabricatorPolicyCapability::CAN_EDIT);
+
+    $can_edit = ($has_manage && $has_edit);
+
     $step_list = id(new PHUIObjectItemListView())
       ->setUser($viewer)
       ->setNoDataString(
-        pht('This build plan does not have any build steps yet.'))
-      ->setID($list_id);
-    Javelin::initBehavior(
-      'harbormaster-reorder-steps',
-      array(
-        'listID' => $list_id,
-        'orderURI' => '/harbormaster/plan/order/'.$plan->getID().'/',
-      ));
+        pht('This build plan does not have any build steps yet.'));
 
+    $i = 1;
+    $last_depth = 0;
     $has_any_conflicts = false;
-    foreach ($steps as $step) {
+    $is_deadlocking = false;
+    foreach ($run_order as $run_ref) {
+      $step = $steps[$run_ref['node']->getPHID()];
+      $depth = $run_ref['depth'] + 1;
+      if ($last_depth !== $depth) {
+        $last_depth = $depth;
+        $i = 1;
+      } else {
+        $i++;
+      }
+
       $implementation = null;
       try {
         $implementation = $step->getStepImplementation();
@@ -108,7 +118,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         // We can't initialize the implementation. This might be because
         // it's been renamed or no longer exists.
         $item = id(new PHUIObjectItemView())
-          ->setObjectName(pht('Step %d', $i++))
+          ->setObjectName(pht('Step %d.%d', $depth, $i))
           ->setHeader(pht('Unknown Implementation'))
           ->setBarColor('red')
           ->addAttribute(pht(
@@ -127,7 +137,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         continue;
       }
       $item = id(new PHUIObjectItemView())
-        ->setObjectName('Step '.$i++)
+        ->setObjectName(pht('Step %d.%d', $depth, $i))
         ->setHeader($step->getName());
 
       $item->addAttribute($implementation->getDescription());
@@ -138,12 +148,6 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
 
       if ($can_edit) {
         $item->setHref($edit_uri);
-        $item->setGrippable(true);
-        $item->addSigil('build-step');
-        $item->setMetadata(
-          array(
-            'stepID' => $step->getID(),
-          ));
       }
 
       $item
@@ -157,16 +161,23 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
             ->setHref(
               $this->getApplicationURI('step/delete/'.$step->getID().'/')));
 
+      $depends = $step->getStepImplementation()->getDependencies($step);
       $inputs = $step->getStepImplementation()->getArtifactInputs();
       $outputs = $step->getStepImplementation()->getArtifactOutputs();
 
       $has_conflicts = false;
-      if ($inputs || $outputs) {
+      if ($depends || $inputs || $outputs) {
         $available_artifacts =
-          HarbormasterBuildStepImplementation::loadAvailableArtifacts(
+          HarbormasterBuildStepImplementation::getAvailableArtifacts(
             $plan,
             $step,
             null);
+        $available_artifacts = ipull($available_artifacts, 'type');
+
+        list($depends_ui, $has_conflicts) = $this->buildDependsOnList(
+            $depends,
+            pht('Depends On'),
+            $steps);
 
         list($inputs_ui, $has_conflicts) = $this->buildArtifactList(
             $inputs,
@@ -187,6 +198,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
               'class' => 'harbormaster-artifact-io',
             ),
             array(
+              $depends_ui,
               $inputs_ui,
               $outputs_ui,
             )));
@@ -197,15 +209,43 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $item->setBarColor('red');
       }
 
+      if ($run_ref['cycle']) {
+        $is_deadlocking = true;
+      }
+
+      if ($is_deadlocking) {
+        $item->setBarColor('red');
+      }
+
       $step_list->addItem($item);
     }
 
-    return array($step_list, $has_any_conflicts);
+    $step_list->setFlush(true);
+
+    $plan_id = $plan->getID();
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Build Steps'))
+      ->addActionLink(
+        id(new PHUIButtonView())
+          ->setText(pht('Add Build Step'))
+          ->setHref($this->getApplicationURI("step/add/{$plan_id}/"))
+          ->setTag('a')
+          ->setIcon(
+            id(new PHUIIconView())
+              ->setIconFont('fa-plus'))
+          ->setDisabled(!$can_edit)
+          ->setWorkflow(true));
+
+    $step_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->appendChild($step_list);
+
+    return array($step_box, $has_any_conflicts, $is_deadlocking);
   }
 
   private function buildActionList(HarbormasterBuildPlan $plan) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+    $viewer = $this->getViewer();
     $id = $plan->getID();
 
     $list = id(new PhabricatorActionListView())
@@ -213,8 +253,15 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       ->setObject($plan)
       ->setObjectURI($this->getApplicationURI("plan/{$id}/"));
 
-    $can_edit = $this->hasApplicationCapability(
+    $has_manage = $this->hasApplicationCapability(
       HarbormasterManagePlansCapability::CAPABILITY);
+
+    $has_edit = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $plan,
+      PhabricatorPolicyCapability::CAN_EDIT);
+
+    $can_edit = ($has_manage && $has_edit);
 
     $list->addAction(
       id(new PhabricatorActionView())
@@ -244,18 +291,10 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
 
     $list->addAction(
       id(new PhabricatorActionView())
-        ->setName(pht('Add Build Step'))
-        ->setHref($this->getApplicationURI("step/add/{$id}/"))
-        ->setWorkflow(true)
-        ->setDisabled(!$can_edit)
-        ->setIcon('fa-plus'));
-
-    $list->addAction(
-      id(new PhabricatorActionView())
         ->setName(pht('Run Plan Manually'))
         ->setHref($this->getApplicationURI("plan/run/{$id}/"))
         ->setWorkflow(true)
-        ->setDisabled(!$can_edit)
+        ->setDisabled(!$has_manage)
         ->setIcon('fa-play-circle'));
 
     return $list;
@@ -290,7 +329,6 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
     if (!$artifacts) {
       return array(null, $has_conflicts);
     }
-
 
     $this->requireResource('harbormaster-css');
 
@@ -364,7 +402,8 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $note = array(
           phutil_tag('strong', array(), pht('ERROR:')),
           ' ',
-          $error);
+          $error,
+        );
       } else {
         $note = $bound;
       }
@@ -384,4 +423,70 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
     return array($ui, $has_conflicts);
   }
 
+  private function buildDependsOnList(
+    array $step_phids,
+    $name,
+    array $steps) {
+    $has_conflicts = false;
+
+    if (count($step_phids) === 0) {
+      return null;
+    }
+
+    $this->requireResource('harbormaster-css');
+
+    $steps = mpull($steps, null, 'getPHID');
+
+    $header = phutil_tag(
+      'div',
+      array(
+        'class' => 'harbormaster-artifact-summary-header',
+      ),
+      $name);
+
+    $list = new PHUIStatusListView();
+    foreach ($step_phids as $step_phid) {
+      $error = null;
+
+      if (idx($steps, $step_phid) === null) {
+        $icon = PHUIStatusItemView::ICON_WARNING;
+        $color = 'red';
+        $icon_label = pht('Missing Dependency');
+        $has_conflicts = true;
+        $error = pht(
+          "This dependency specifies a build step which doesn't exist.");
+      } else {
+        $bound = phutil_tag(
+          'strong',
+          array(),
+          idx($steps, $step_phid)->getName());
+        $icon = PHUIStatusItemView::ICON_ACCEPT;
+        $color = 'green';
+        $icon_label = pht('Valid Input');
+      }
+
+      if ($error) {
+        $note = array(
+          phutil_tag('strong', array(), pht('ERROR:')),
+          ' ',
+          $error,
+        );
+      } else {
+        $note = $bound;
+      }
+
+      $list->addItem(
+        id(new PHUIStatusItemView())
+          ->setIcon($icon, $color, $icon_label)
+          ->setTarget(pht('Build Step'))
+          ->setNote($note));
+    }
+
+    $ui = array(
+      $header,
+      $list,
+    );
+
+    return array($ui, $has_conflicts);
+  }
 }

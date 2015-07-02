@@ -7,6 +7,10 @@ final class PhabricatorCommitSearchEngine
     return pht('Commits');
   }
 
+  public function getApplicationClassName() {
+    return 'PhabricatorDiffusionApplication';
+  }
+
   public function buildSavedQueryFromRequest(AphrontRequest $request) {
     $saved = new PhabricatorSavedQuery();
 
@@ -59,6 +63,11 @@ final class PhabricatorCommitSearchEngine
       $query->withAuditAwaitingUser($this->requireViewer());
     }
 
+    $repository_phids = $saved->getParameter('repositoryPHIDs', array());
+    if ($repository_phids) {
+      $query->withRepositoryPHIDs($repository_phids);
+    }
+
     return $query;
   }
 
@@ -71,43 +80,41 @@ final class PhabricatorCommitSearchEngine
       'commitAuthorPHIDs',
       array());
     $audit_status = $saved->getParameter('auditStatus', null);
-
-    $phids = array_mergev(
-      array(
-        $auditor_phids,
-        $commit_author_phids));
-
-    $handles = id(new PhabricatorHandleQuery())
-      ->setViewer($this->requireViewer())
-      ->withPHIDs($phids)
-      ->execute();
+    $repository_phids = $saved->getParameter('repositoryPHIDs', array());
 
     $form
-      ->appendChild(
+      ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setDatasource(new DiffusionAuditorDatasource())
           ->setName('auditorPHIDs')
           ->setLabel(pht('Auditors'))
-          ->setValue(array_select_keys($handles, $auditor_phids)))
-      ->appendChild(
+          ->setValue($auditor_phids))
+      ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setDatasource(new PhabricatorPeopleDatasource())
           ->setName('authors')
           ->setLabel(pht('Commit Authors'))
-          ->setValue(array_select_keys($handles, $commit_author_phids)))
+          ->setValue($commit_author_phids))
        ->appendChild(
          id(new AphrontFormSelectControl())
-         ->setName('auditStatus')
-         ->setLabel(pht('Audit Status'))
-         ->setOptions($this->getAuditStatusOptions())
-         ->setValue($audit_status));
+           ->setName('auditStatus')
+           ->setLabel(pht('Audit Status'))
+           ->setOptions($this->getAuditStatusOptions())
+           ->setValue($audit_status))
+       ->appendControl(
+         id(new AphrontFormTokenizerControl())
+           ->setLabel(pht('Repositories'))
+           ->setName('repositoryPHIDs')
+           ->setDatasource(new DiffusionRepositoryDatasource())
+           ->setValue($repository_phids));
+
   }
 
   protected function getURI($path) {
     return '/audit/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     $names = array();
 
     if ($this->requireViewer()->isLoggedIn()) {
@@ -167,6 +174,8 @@ final class PhabricatorCommitSearchEngine
       DiffusionCommitQuery::AUDIT_STATUS_ANY => pht('Any'),
       DiffusionCommitQuery::AUDIT_STATUS_OPEN => pht('Open'),
       DiffusionCommitQuery::AUDIT_STATUS_CONCERN => pht('Concern Raised'),
+      DiffusionCommitQuery::AUDIT_STATUS_ACCEPTED => pht('Accepted'),
+      DiffusionCommitQuery::AUDIT_STATUS_PARTIAL => pht('Partially Audited'),
     );
   }
 

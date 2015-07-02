@@ -20,6 +20,7 @@ final class PhabricatorPeopleProfilePictureController
     $user = id(new PhabricatorPeopleQuery())
       ->setViewer($viewer)
       ->withIDs(array($this->id))
+      ->needProfileImage(true)
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -53,6 +54,7 @@ final class PhabricatorPeopleProfilePictureController
             $_FILES['picture'],
             array(
               'authorPHID' => $viewer->getPHID(),
+              'canCDN' => true,
             ));
         } else {
           $e_file = pht('Required');
@@ -68,12 +70,9 @@ final class PhabricatorPeopleProfilePictureController
             'This server only supports these image formats: %s.',
             implode(', ', $supported_formats));
         } else {
-          $xformer = new PhabricatorImageTransformer();
-          $xformed = $xformer->executeProfileTransform(
-            $file,
-            $width = 50,
-            $min_height = 50,
-            $max_height = 50);
+          $xform = PhabricatorFileTransform::getTransformByKey(
+            PhabricatorFileThumbnailTransform::TRANSFORM_PROFILE);
+          $xformed = $xform->executeTransform($file);
         }
       }
 
@@ -82,7 +81,7 @@ final class PhabricatorPeopleProfilePictureController
           $user->setProfileImagePHID(null);
         } else {
           $user->setProfileImagePHID($xformed->getPHID());
-          $xformed->attachToObject($viewer, $user->getPHID());
+          $xformed->attachToObject($user->getPHID());
         }
         $user->save();
         return id(new AphrontRedirectResponse())->setURI($profile_uri);
@@ -90,9 +89,6 @@ final class PhabricatorPeopleProfilePictureController
     }
 
     $title = pht('Edit Profile Picture');
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb($user->getUsername(), $profile_uri);
-    $crumbs->addTextCrumb($title);
 
     $form = id(new PHUIFormLayoutView())
       ->setUser($viewer);
@@ -155,51 +151,6 @@ final class PhabricatorPeopleProfilePictureController
       }
     }
 
-    // Try to add Gravatar images for any email addresses associated with the
-    // account.
-    if (PhabricatorEnv::getEnvConfig('security.allow-outbound-http')) {
-      $emails = id(new PhabricatorUserEmail())->loadAllWhere(
-        'userPHID = %s ORDER BY address',
-        $user->getPHID());
-
-      $futures = array();
-      foreach ($emails as $email_object) {
-        $email = $email_object->getAddress();
-
-        $hash = md5(strtolower(trim($email)));
-        $uri = id(new PhutilURI("https://secure.gravatar.com/avatar/{$hash}"))
-          ->setQueryParams(
-            array(
-              'size' => 200,
-              'default' => '404',
-              'rating' => 'x',
-            ));
-        $futures[$email] = new HTTPSFuture($uri);
-      }
-
-      $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-      foreach (Futures($futures) as $email => $future) {
-        try {
-          list($body) = $future->resolvex();
-          $file = PhabricatorFile::newFromFileData(
-            $body,
-            array(
-              'name' => 'profile-gravatar',
-              'ttl'  => (60 * 60 * 4),
-            ));
-          if ($file->isTransformableImage()) {
-            $images[$file->getPHID()] = array(
-              'uri' => $file->getBestURI(),
-              'tip' => pht('Gravatar for %s', $email),
-            );
-          }
-        } catch (Exception $ex) {
-          // Just continue.
-        }
-      }
-      unset($unguarded);
-    }
-
     $images[PhabricatorPHIDConstants::PHID_VOID] = array(
       'uri' => $default_image->getBestURI(),
       'tip' => pht('Default Picture'),
@@ -236,7 +187,8 @@ final class PhabricatorPeopleProfilePictureController
             'name'  => 'phid',
             'value' => $phid,
           )),
-        $button);
+        $button,
+      );
 
       $button = phabricator_form(
         $viewer,
@@ -285,12 +237,13 @@ final class PhabricatorPeopleProfilePictureController
       ->setHeaderText(pht('Upload New Picture'))
       ->setForm($upload_form);
 
+    $nav = $this->buildIconNavView($user);
+    $nav->selectFilter('/');
+    $nav->appendChild($form_box);
+    $nav->appendChild($upload_box);
+
     return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $form_box,
-        $upload_box,
-      ),
+      $nav,
       array(
         'title' => $title,
       ));

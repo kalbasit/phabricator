@@ -5,6 +5,10 @@ final class PhabricatorApplicationTransactionDetailController
 
   private $phid;
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->phid = $data['phid'];
   }
@@ -28,6 +32,7 @@ final class PhabricatorApplicationTransactionDetailController
       ->setUser($viewer)
       ->setTitle(pht('Change Details'))
       ->setWidth(AphrontDialogView::WIDTH_FULL)
+      ->setFlush(true)
       ->appendChild($details)
       ->addCancelButton($cancel_uri);
 

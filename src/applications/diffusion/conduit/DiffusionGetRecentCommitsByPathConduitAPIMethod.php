@@ -10,10 +10,11 @@ final class DiffusionGetRecentCommitsByPathConduitAPIMethod
   }
 
   public function getMethodDescription() {
-    return 'Get commit identifiers for recent commits affecting a given path.';
+    return pht(
+      'Get commit identifiers for recent commits affecting a given path.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array(
       'callsign' => 'required string',
       'path' => 'required string',
@@ -22,13 +23,8 @@ final class DiffusionGetRecentCommitsByPathConduitAPIMethod
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'nonempty list<string>';
-  }
-
-  public function defineErrorTypes() {
-    return array(
-    );
   }
 
   protected function execute(ConduitAPIRequest $request) {
@@ -54,7 +50,8 @@ final class DiffusionGetRecentCommitsByPathConduitAPIMethod
         'offset' => 0,
         'limit' => $limit,
         'needDirectChanges' => true,
-        'needChildChanges' => true));
+        'needChildChanges' => true,
+      ));
     $history = DiffusionPathChange::newFromConduit(
       $history_result['pathChanges']);
 

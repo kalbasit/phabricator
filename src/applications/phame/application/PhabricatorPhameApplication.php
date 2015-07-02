@@ -10,23 +10,28 @@ final class PhabricatorPhameApplication extends PhabricatorApplication {
     return '/phame/';
   }
 
-  public function getIconName() {
-    return 'phame';
+  public function getFontIcon() {
+    return 'fa-star';
   }
 
   public function getShortDescription() {
-    return 'Blog';
+    return pht('Blog');
   }
 
   public function getTitleGlyph() {
     return "\xe2\x9c\xa9";
   }
 
-  public function getHelpURI() {
-    return PhabricatorEnv::getDoclink('Phame User Guide');
+  public function getHelpDocumentationArticles(PhabricatorUser $viewer) {
+    return array(
+      array(
+        'name' => pht('Phame User Guide'),
+        'href' => PhabricatorEnv::getDoclink('Phame User Guide'),
+      ),
+    );
   }
 
-  public function isBeta() {
+  public function isPrototype() {
     return true;
   }
 
@@ -50,7 +55,7 @@ final class PhabricatorPhameApplication extends PhabricatorApplication {
           'preview/' => 'PhamePostPreviewController',
           'framed/(?P<id>\d+)/' => 'PhamePostFramedController',
           'new/' => 'PhamePostNewController',
-          'move/(?P<id>\d+)/' => 'PhamePostNewController'
+          'move/(?P<id>\d+)/' => 'PhamePostNewController',
         ),
         'blog/' => array(
           '(?:(?P<filter>user|all)/)?' => 'PhameBlogListController',
@@ -61,6 +66,12 @@ final class PhabricatorPhameApplication extends PhabricatorApplication {
           'new/' => 'PhameBlogEditController',
         ),
       ),
+    );
+  }
+
+  public function getQuicksandURIPatternBlacklist() {
+    return array(
+      '/phame/live/.*',
     );
   }
 

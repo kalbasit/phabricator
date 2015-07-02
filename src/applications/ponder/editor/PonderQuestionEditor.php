@@ -5,6 +5,10 @@ final class PonderQuestionEditor
 
   private $answer;
 
+  public function getEditorObjectsDescription() {
+    return pht('Ponder Questions');
+  }
+
   /**
    * This is used internally on @{method:applyInitialEffects} if a transaction
    * of type PonderQuestionTransaction::TYPE_ANSWERS is in the mix. The value
@@ -141,8 +145,6 @@ final class PonderQuestionEditor
 
         $object->setAnswerCount($count);
         break;
-      case PhabricatorTransactions::TYPE_EDGE:
-        return;
     }
   }
 
@@ -239,7 +241,7 @@ final class PonderQuestionEditor
       }
     }
 
-    $body->addTextSection(
+    $body->addLinkSection(
       $header,
       PhabricatorEnv::getProductionURI($uri));
 

@@ -1,7 +1,6 @@
 <?php
 
-final class PhabricatorIRCProtocolAdapter
-  extends PhabricatorBaseProtocolAdapter {
+final class PhabricatorIRCProtocolAdapter extends PhabricatorProtocolAdapter {
 
   private $socket;
 
@@ -20,7 +19,8 @@ final class PhabricatorIRCProtocolAdapter
 
   // Hash map of command translations
   public static $commandTranslations = array(
-    'PRIVMSG' => 'MESSAGE');
+    'PRIVMSG' => 'MESSAGE',
+  );
 
   public function connect() {
     $nick = $this->getConfig('nick', 'phabot');
@@ -32,7 +32,9 @@ final class PhabricatorIRCProtocolAdapter
 
     if (!preg_match('/^[A-Za-z0-9_`[{}^|\]\\-]+$/', $nick)) {
       throw new Exception(
-        "Nickname '{$nick}' is invalid!");
+        pht(
+          "Nickname '%s' is invalid!",
+          $nick));
     }
 
     $errno = null;
@@ -43,11 +45,11 @@ final class PhabricatorIRCProtocolAdapter
       $socket = fsockopen('ssl://'.$server, $port, $errno, $error);
     }
     if (!$socket) {
-      throw new Exception("Failed to connect, #{$errno}: {$error}");
+      throw new Exception(pht('Failed to connect, #%d: %s', $errno, $error));
     }
     $ok = stream_set_blocking($socket, false);
     if (!$ok) {
-      throw new Exception('Failed to set stream nonblocking.');
+      throw new Exception(pht('Failed to set stream nonblocking.'));
     }
 
     $this->socket = $socket;
@@ -71,8 +73,13 @@ final class PhabricatorIRCProtocolAdapter
 
     $ok = @stream_select($read, $write, $except, $timeout_sec = 1);
     if ($ok === false) {
-      throw new Exception(
-        'socket_select() failed: '.socket_strerror(socket_last_error()));
+      // We may have been interrupted by a signal, like a SIGINT. Try
+      // selecting again. If the second select works, conclude that the failure
+      // was most likely because we were signaled.
+      $ok = @stream_select($read, $write, $except, $timeout_sec = 0);
+      if ($ok === false) {
+        throw new Exception(pht('%s failed!', 'stream_select()'));
+      }
     }
 
     if ($read) {
@@ -82,12 +89,12 @@ final class PhabricatorIRCProtocolAdapter
         // This indicates the connection was terminated on the other side,
         // just exit via exception and let the overseer restart us after a
         // delay so we can reconnect.
-        throw new Exception('Remote host closed connection.');
+        throw new Exception(pht('Remote host closed connection.'));
       }
       do {
         $data = fread($this->socket, 4096);
         if ($data === false) {
-          throw new Exception('fread() failed!');
+          throw new Exception(pht('%s failed!', 'fread()'));
         } else {
           $messages[] = id(new PhabricatorBotMessage())
             ->setCommand('LOG')
@@ -101,7 +108,9 @@ final class PhabricatorIRCProtocolAdapter
       do {
         $len = fwrite($this->socket, $this->writeBuffer);
         if ($len === false) {
-          throw new Exception('fwrite() failed!');
+          throw new Exception(pht('%s failed!', 'fwrite()'));
+        } else if ($len === 0) {
+          break;
         } else {
           $messages[] = id(new PhabricatorBotMessage())
             ->setCommand('LOG')
@@ -199,7 +208,7 @@ final class PhabricatorIRCProtocolAdapter
         }
         $join = $this->getConfig('join');
         if (!$join) {
-          throw new Exception('Not configured to join any channels!');
+          throw new Exception(pht('Not configured to join any channels!'));
         }
         foreach ($join as $channel) {
           $this->write("JOIN {$channel}");
@@ -239,7 +248,8 @@ final class PhabricatorIRCProtocolAdapter
 
           return array(
             $target,
-            rtrim($matches[2], "\r\n"));
+            rtrim($matches[2], "\r\n"),
+          );
         }
         break;
     }
@@ -247,11 +257,26 @@ final class PhabricatorIRCProtocolAdapter
     // By default we assume there is no target, only a body
     return array(
       null,
-      $data);
+      $data,
+    );
   }
 
-  public function __destruct() {
-    $this->write('QUIT Goodbye.');
-    fclose($this->socket);
+  public function disconnect() {
+    // NOTE: FreeNode doesn't show quit messages if you've recently joined a
+    // channel, presumably to prevent some kind of abuse. If you're testing
+    // this, you may need to stay connected to the network for a few minutes
+    // before it works. If you disconnect too quickly, the server will replace
+    // your message with a "Client Quit" message.
+
+    $quit = $this->getConfig('quit', pht('Shutting down.'));
+    $this->write("QUIT :{$quit}");
+
+    // Flush the write buffer.
+    while (strlen($this->writeBuffer)) {
+      $this->getNextMessages(0);
+    }
+
+    @fclose($this->socket);
+    $this->socket = null;
   }
 }

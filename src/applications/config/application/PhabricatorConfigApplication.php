@@ -6,8 +6,8 @@ final class PhabricatorConfigApplication extends PhabricatorApplication {
     return '/config/';
   }
 
-  public function getIconName() {
-    return 'setup';
+  public function getFontIcon() {
+    return 'fa-sliders';
   }
 
   public function isPinnedByDefault(PhabricatorUser $viewer) {
@@ -39,14 +39,25 @@ final class PhabricatorConfigApplication extends PhabricatorApplication {
       '/config/' => array(
         '' => 'PhabricatorConfigListController',
         'all/' => 'PhabricatorConfigAllController',
+        'history/' => 'PhabricatorConfigHistoryController',
         'edit/(?P<key>[\w\.\-]+)/' => 'PhabricatorConfigEditController',
         'group/(?P<key>[^/]+)/' => 'PhabricatorConfigGroupController',
         'welcome/' => 'PhabricatorConfigWelcomeController',
+        'database/'.
+          '(?:(?P<database>[^/]+)/'.
+          '(?:(?P<table>[^/]+)/'.
+          '(?:(?:col/(?P<column>[^/]+)|key/(?P<key>[^/]+))/)?)?)?'
+          => 'PhabricatorConfigDatabaseStatusController',
+        'dbissue/' => 'PhabricatorConfigDatabaseIssueController',
         '(?P<verb>ignore|unignore)/(?P<key>[^/]+)/'
           => 'PhabricatorConfigIgnoreController',
         'issue/' => array(
           '' => 'PhabricatorConfigIssueListController',
           '(?P<key>[^/]+)/' => 'PhabricatorConfigIssueViewController',
+        ),
+        'cache/' => 'PhabricatorConfigCacheController',
+        'module/' => array(
+          'sites/' => 'PhabricatorConfigSiteModuleController',
         ),
       ),
     );

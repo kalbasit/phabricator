@@ -18,6 +18,10 @@ final class PhabricatorStandardCustomFieldDate
     return $indexes;
   }
 
+  public function buildOrderIndex() {
+    return $this->newNumericIndex(0);
+  }
+
   public function getValueForStorage() {
     $value = $this->getFieldValue();
     if (strlen($value)) {
@@ -129,8 +133,7 @@ final class PhabricatorStandardCustomFieldDate
   public function appendToApplicationSearchForm(
     PhabricatorApplicationSearchEngine $engine,
     AphrontFormView $form,
-    $value,
-    array $handles) {
+    $value) {
 
     if (!is_array($value)) {
       $value = array();

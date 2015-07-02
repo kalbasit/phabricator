@@ -3,6 +3,8 @@
 final class PhabricatorMailImplementationPHPMailerAdapter
   extends PhabricatorMailImplementationAdapter {
 
+  private $mailer;
+
   /**
    * @phutil-external-symbol class PHPMailer
    */
@@ -12,6 +14,9 @@ final class PhabricatorMailImplementationPHPMailerAdapter
     require_once $root.'/externals/phpmailer/class.phpmailer.php';
     $this->mailer = new PHPMailer($use_exceptions = true);
     $this->mailer->CharSet = 'utf-8';
+
+    $encoding = PhabricatorEnv::getEnvConfig('phpmailer.smtp-encoding', '8bit');
+    $this->mailer->Encoding = $encoding;
 
     // By default, PHPMailer sends one mail per recipient. We handle
     // multiplexing higher in the stack, so tell it to send mail exactly
@@ -91,17 +96,19 @@ final class PhabricatorMailImplementationPHPMailerAdapter
   }
 
   public function setBody($body) {
+    $this->mailer->IsHTML(false);
     $this->mailer->Body = $body;
+    return $this;
+  }
+
+  public function setHTMLBody($html_body) {
+    $this->mailer->IsHTML(true);
+    $this->mailer->Body = $html_body;
     return $this;
   }
 
   public function setSubject($subject) {
     $this->mailer->Subject = $subject;
-    return $this;
-  }
-
-  public function setIsHTML($is_html) {
-    $this->mailer->IsHTML($is_html);
     return $this;
   }
 

@@ -13,20 +13,39 @@ final class NuanceItem
   protected $requestorPHID;
   protected $sourcePHID;
   protected $sourceLabel;
-  protected $data;
+  protected $data = array();
   protected $mailKey;
   protected $dateNuanced;
 
-  public static function initializeNewItem(PhabricatorUser $user) {
+  public static function initializeNewItem() {
     return id(new NuanceItem())
       ->setDateNuanced(time())
-      ->setStatus(NuanceItem::STATUS_OPEN);
+      ->setStatus(self::STATUS_OPEN);
   }
-  public function getConfiguration() {
+
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'data' => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'ownerPHID' => 'phid?',
+        'sourceLabel' => 'text255?',
+        'status' => 'uint32',
+        'mailKey' => 'bytes20',
+        'dateNuanced' => 'epoch',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_source' => array(
+          'columns' => array('sourcePHID', 'status', 'dateNuanced', 'id'),
+        ),
+        'key_owner' => array(
+          'columns' => array('ownerPHID', 'status', 'dateNuanced', 'id'),
+        ),
+        'key_contacter' => array(
+          'columns' => array('requestorPHID', 'status', 'dateNuanced', 'id'),
+        ),
       ),
     ) + parent::getConfiguration();
   }
@@ -73,6 +92,15 @@ final class NuanceItem
 
   public function attachSource(NuanceSource $source) {
     $this->source = $source;
+  }
+
+  public function getNuanceProperty($key, $default = null) {
+    return idx($this->data, $key, $default);
+  }
+
+  public function setNuanceProperty($key, $value) {
+    $this->data[$key] = $value;
+    return $this;
   }
 
   public function getCapabilities() {

@@ -22,14 +22,6 @@ final class HarbormasterBuildStepQuery
     return $this;
   }
 
-  public function getPagingColumn() {
-    return 'sequence';
-  }
-
-  public function getReversePaging() {
-    return true;
-  }
-
   protected function loadPage() {
     $table = new HarbormasterBuildStep();
     $conn_r = $table->establishConnection('r');
@@ -45,7 +37,7 @@ final class HarbormasterBuildStepQuery
     return $table->loadAllFromArray($data);
   }
 
-  private function buildWhereClause(AphrontDatabaseConnection $conn_r) {
+  protected function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
 
     if ($this->ids) {

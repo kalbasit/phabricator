@@ -19,6 +19,7 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
       $macro = id(new PhabricatorMacroQuery())
         ->setViewer($user)
         ->withIDs(array($this->id))
+        ->needFiles(true)
         ->executeOne();
       if (!$macro) {
         return new Aphront404Response();
@@ -32,7 +33,6 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
     $e_name = true;
     $e_file = null;
     $file = null;
-    $can_fetch = PhabricatorEnv::getEnvConfig('security.allow-outbound-http');
 
     if ($request->isFormPost()) {
       $original = clone $macro;
@@ -56,6 +56,10 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
         }
       }
 
+      $uri = $request->getStr('url');
+
+      $engine = new PhabricatorDestructionEngine();
+
       $file = null;
       if ($request->getFileExists('file')) {
         $file = PhabricatorFile::newFromPHPUpload(
@@ -64,18 +68,49 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
             'name' => $request->getStr('name'),
             'authorPHID' => $user->getPHID(),
             'isExplicitUpload' => true,
+            'canCDN' => true,
           ));
-      } else if ($request->getStr('url')) {
+      } else if ($uri) {
         try {
+          // Rate limit outbound fetches to make this mechanism less useful for
+          // scanning networks and ports.
+          PhabricatorSystemActionEngine::willTakeAction(
+            array($user->getPHID()),
+            new PhabricatorFilesOutboundRequestAction(),
+            1);
+
           $file = PhabricatorFile::newFromFileDownload(
-            $request->getStr('url'),
+            $uri,
             array(
               'name' => $request->getStr('name'),
-              'authorPHID' => $user->getPHID(),
+              'viewPolicy' => PhabricatorPolicies::POLICY_NOONE,
               'isExplicitUpload' => true,
+              'canCDN' => true,
             ));
+
+          if (!$file->isViewableInBrowser()) {
+            $mime_type = $file->getMimeType();
+            $engine->destroyObject($file);
+            $file = null;
+            throw new Exception(
+              pht(
+                'The URI "%s" does not correspond to a valid image file, got '.
+                'a file with MIME type "%s". You must specify the URI of a '.
+                'valid image file.',
+                $uri,
+                $mime_type));
+          } else {
+            $file
+              ->setAuthorPHID($user->getPHID())
+              ->save();
+          }
+        } catch (HTTPFutureHTTPResponseStatus $status) {
+          $errors[] = pht(
+            'The URI "%s" could not be loaded, got %s error.',
+            $uri,
+            $status->getStatusCode());
         } catch (Exception $ex) {
-          $errors[] = pht('Could not fetch URL: %s', $ex->getMessage());
+          $errors[] = $ex->getMessage();
         }
       } else if ($request->getStr('phid')) {
         $file = id(new PhabricatorFileQuery())
@@ -106,13 +141,13 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
 
           if ($new_name !== null) {
             $xactions[] = id(new PhabricatorMacroTransaction())
-              ->setTransactionType(PhabricatorMacroTransactionType::TYPE_NAME)
+              ->setTransactionType(PhabricatorMacroTransaction::TYPE_NAME)
               ->setNewValue($new_name);
           }
 
           if ($file) {
             $xactions[] = id(new PhabricatorMacroTransaction())
-              ->setTransactionType(PhabricatorMacroTransactionType::TYPE_FILE)
+              ->setTransactionType(PhabricatorMacroTransaction::TYPE_FILE)
               ->setNewValue($file->getPHID());
           }
 
@@ -125,7 +160,7 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
 
           $view_uri = $this->getApplicationURI('/view/'.$original->getID().'/');
           return id(new AphrontRedirectResponse())->setURI($view_uri);
-        } catch (AphrontQueryDuplicateKeyException $ex) {
+        } catch (AphrontDuplicateKeyQueryException $ex) {
           throw $ex;
           $errors[] = pht('Macro name is not unique!');
           $e_name = pht('Duplicate');
@@ -172,14 +207,12 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
         $other_label = pht('File');
       }
 
-      if ($can_fetch) {
-        $form->appendChild(
-          id(new AphrontFormTextControl())
-            ->setLabel(pht('URL'))
-            ->setName('url')
-            ->setValue($request->getStr('url'))
-            ->setError($request->getFileExists('file') ? false : $e_file));
-      }
+      $form->appendChild(
+        id(new AphrontFormTextControl())
+          ->setLabel(pht('URL'))
+          ->setName('url')
+          ->setValue($request->getStr('url'))
+          ->setError($request->getFileExists('file') ? false : $e_file));
 
       $form->appendChild(
         id(new AphrontFormFileControl())
@@ -223,13 +256,11 @@ final class PhabricatorMacroEditController extends PhabricatorMacroController {
         ->setEncType('multipart/form-data')
         ->setUser($request->getUser());
 
-      if ($can_fetch) {
-        $upload_form->appendChild(
-          id(new AphrontFormTextControl())
-            ->setLabel(pht('URL'))
-            ->setName('url')
-            ->setValue($request->getStr('url')));
-      }
+      $upload_form->appendChild(
+        id(new AphrontFormTextControl())
+          ->setLabel(pht('URL'))
+          ->setName('url')
+          ->setValue($request->getStr('url')));
 
       $upload_form
         ->appendChild(

@@ -59,6 +59,14 @@ value of `maniphest.custom-field-definitions`):
       "type": "int",
       "caption": "Actual number of hours this took."
     },
+    "mycompany:company-jobs": {
+      "name": "Job Role",
+      "type": "select",
+      "options": {
+        "mycompany:engineer": "Engineer",
+        "mycompany:nonengineer": "Other"
+      }
+    },
     "mycompany:favorite-dinosaur": {
       "name": "Favorite Dinosaur",
       "type": "text"
@@ -82,18 +90,22 @@ When defining custom fields using a configuration option like
     - **int**: An integer, rendered as a text field.
     - **text**: A string, rendered as a text field.
     - **bool**: A boolean value, rendered as a checkbox.
-    - **select**: Allows the user to select from several options, rendered
-      as a dropdown.
+    - **select**: Allows the user to select from several options as defined
+      by **options**, rendered as a dropdown.
     - **remarkup**: A text area which allows the user to enter markup.
     - **users**: A typeahead which allows multiple users to be input.
     - **date**: A date/time picker.
     - **header**: Renders a visual divider which you can use to group fields.
+    - **link**: A text field which allows the user to enter a link.
   - **edit**: Show this field on the application's edit interface (this
     defaults to `true`).
   - **view**: Show this field on the application's view interface (this
-    defaults to `true`).
+    defaults to `true`). (Note: Empty fields are not shown.)
   - **search**: Show this field on the application's search interface, allowing
     users to filter objects by the field value.
+  - **fulltext**: Index the text in this field as part of the object's global
+    full-text index. This allows users to find the object by searching for
+    the field's contents using global search.
   - **caption**: A caption to display underneath the field (optional).
   - **required**: True if the user should be required to provide a value.
   - **options**: If type is set to **select**, provide options for the dropdown
@@ -195,5 +207,5 @@ integrations, see the base class for your application and
 Continue by:
 
   - learning more about extending Phabricator with custom code in
-    @{article:libphutil Libraries User Guide};
+    @{article@contributor:Adding New Classes};
   - or returning to the @{article: Configuration Guide}.

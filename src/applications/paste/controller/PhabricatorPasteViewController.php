@@ -58,14 +58,6 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
       ->execute();
     $fork_phids = mpull($forks, 'getPHID');
 
-    $this->loadHandles(
-      array_merge(
-        array(
-          $paste->getAuthorPHID(),
-          $paste->getParentPHID(),
-        ),
-        $fork_phids));
-
     $header = $this->buildHeaderView($paste);
     $actions = $this->buildActionView($user, $paste, $file);
     $properties = $this->buildPropertyView($paste, $fork_phids, $actions);
@@ -87,30 +79,11 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
       ->addMargin(PHUI::MARGIN_LARGE_TOP);
 
     $crumbs = $this->buildApplicationCrumbs($this->buildSideNavView())
-      ->setActionList($actions)
       ->addTextCrumb('P'.$paste->getID(), '/P'.$paste->getID());
 
-    $xactions = id(new PhabricatorPasteTransactionQuery())
-      ->setViewer($request->getUser())
-      ->withObjectPHIDs(array($paste->getPHID()))
-      ->execute();
-
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($user);
-    foreach ($xactions as $xaction) {
-      if ($xaction->getComment()) {
-        $engine->addObject(
-          $xaction->getComment(),
-          PhabricatorApplicationTransactionComment::MARKUP_FIELD_COMMENT);
-      }
-    }
-    $engine->process();
-
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($user)
-      ->setObjectPHID($paste->getPHID())
-      ->setTransactions($xactions)
-      ->setMarkupEngine($engine);
+    $timeline = $this->buildTransactionTimeline(
+      $paste,
+      new PhabricatorPasteTransactionQuery());
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
@@ -195,35 +168,35 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
     PhabricatorPaste $paste,
     array $child_phids,
     PhabricatorActionListView $actions) {
+    $viewer = $this->getViewer();
 
-    $user = $this->getRequest()->getUser();
     $properties = id(new PHUIPropertyListView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setObject($paste)
       ->setActionList($actions);
 
     $properties->addProperty(
       pht('Author'),
-      $this->getHandle($paste->getAuthorPHID())->renderLink());
+      $viewer->renderHandle($paste->getAuthorPHID()));
 
     $properties->addProperty(
       pht('Created'),
-      phabricator_datetime($paste->getDateCreated(), $user));
+      phabricator_datetime($paste->getDateCreated(), $viewer));
 
     if ($paste->getParentPHID()) {
       $properties->addProperty(
         pht('Forked From'),
-        $this->getHandle($paste->getParentPHID())->renderLink());
+        $viewer->renderHandle($paste->getParentPHID()));
     }
 
     if ($child_phids) {
       $properties->addProperty(
         pht('Forks'),
-        $this->renderHandlesForPHIDs($child_phids));
+        $viewer->renderHandleList($child_phids));
     }
 
     $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
-      $user,
+      $viewer,
       $paste);
 
     return $properties;

@@ -32,25 +32,18 @@ final class DifferentialRepositoryField
     $this->setValue(nonempty($first, null));
   }
 
-  public function getRequiredHandlePHIDsForEdit() {
-    $phids = array();
-    if ($this->getValue()) {
-      $phids[] = $this->getValue();
-    }
-    return $phids;
-  }
-
   public function renderEditControl(array $handles) {
     if ($this->getValue()) {
-      $control_value = array_select_keys($handles, array($this->getValue()));
+      $value = array($this->getValue());
     } else {
-      $control_value = array();
+      $value = array();
     }
 
     return id(new AphrontFormTokenizerControl())
+      ->setUser($this->getViewer())
       ->setName($this->getFieldKey())
       ->setDatasource(new DiffusionRepositoryDatasource())
-      ->setValue($control_value)
+      ->setValue($value)
       ->setError($this->getFieldError())
       ->setLabel($this->getFieldName())
       ->setLimit(1);
@@ -99,27 +92,32 @@ final class DifferentialRepositoryField
   }
 
   public function getApplicationTransactionTitleForFeed(
-    PhabricatorApplicationTransaction $xaction,
-    PhabricatorFeedStory $story) {
+    PhabricatorApplicationTransaction $xaction) {
 
     $object_phid = $xaction->getObjectPHID();
     $author_phid = $xaction->getAuthorPHID();
     $old = $xaction->getOldValue();
     $new = $xaction->getNewValue();
 
-    if ($old) {
+    if ($old && $new) {
       return pht(
         '%s updated the repository for %s from %s to %s.',
         $xaction->renderHandleLink($author_phid),
         $xaction->renderHandleLink($object_phid),
         $xaction->renderHandleLink($old),
         $xaction->renderHandleLink($new));
-    } else {
+    } else if ($new) {
       return pht(
         '%s set the repository for %s to %s.',
         $xaction->renderHandleLink($author_phid),
         $xaction->renderHandleLink($object_phid),
         $xaction->renderHandleLink($new));
+    } else {
+      return pht(
+        '%s removed the repository for %s. (Repository was %s.)',
+        $xaction->renderHandleLink($author_phid),
+        $xaction->renderHandleLink($object_phid),
+        $xaction->renderHandleLink($old));
     }
   }
 
@@ -127,20 +125,24 @@ final class DifferentialRepositoryField
     return true;
   }
 
-  public function renderPropertyViewLabel() {
+  public function renderPropertyViewValue(array $handles) {
+    return null;
+  }
+
+  public function shouldAppearInDiffPropertyView() {
+    return true;
+  }
+
+  public function renderDiffPropertyViewLabel(DifferentialDiff $diff) {
     return $this->getFieldName();
   }
 
-  public function getRequiredHandlePHIDsForPropertyView() {
-    $repository_phid = $this->getObject()->getRepositoryPHID();
-    if ($repository_phid) {
-      return array($repository_phid);
+  public function renderDiffPropertyViewValue(DifferentialDiff $diff) {
+    if (!$diff->getRepositoryPHID()) {
+      return null;
     }
-    return array();
-  }
 
-  public function renderPropertyViewValue(array $handles) {
-    return $this->renderHandleList($handles);
+    return $this->getViewer()->renderHandle($diff->getRepositoryPHID());
   }
 
   public function shouldAppearInTransactionMail() {
@@ -157,7 +159,8 @@ final class DifferentialRepositoryField
       return;
     }
 
-    $body->addTextSection(pht('REPOSITORY'),
+    $body->addTextSection(
+      pht('REPOSITORY'),
       $repository->getMonogram().' '.$repository->getName());
   }
 

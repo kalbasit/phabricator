@@ -3,6 +3,14 @@
 final class ReleephProductEditor
   extends PhabricatorApplicationTransactionEditor {
 
+  public function getEditorApplicationClass() {
+    return 'PhabricatorReleephApplication';
+  }
+
+  public function getEditorObjectsDescription() {
+    return pht('Releeph Products');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -11,7 +19,7 @@ final class ReleephProductEditor
     return $types;
   }
 
-  public function getCustomTransactionOldValue(
+  protected function getCustomTransactionOldValue(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
 
@@ -21,7 +29,7 @@ final class ReleephProductEditor
     }
   }
 
-  public function getCustomTransactionNewValue(
+  protected function getCustomTransactionNewValue(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
 
@@ -31,7 +39,7 @@ final class ReleephProductEditor
     }
   }
 
-  public function applyCustomInternalTransaction(
+  protected function applyCustomInternalTransaction(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
     $new = $xaction->getNewValue();

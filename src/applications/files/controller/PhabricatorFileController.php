@@ -2,23 +2,12 @@
 
 abstract class PhabricatorFileController extends PhabricatorController {
 
-  public function buildApplicationCrumbs() {
-    $crumbs = parent::buildApplicationCrumbs();
-    $crumbs->addAction(
-      id(new PHUIListItemView())
-        ->setName(pht('Upload File'))
-        ->setIcon('fa-upload')
-        ->setHref($this->getApplicationURI('/upload/')));
-
-    return $crumbs;
-  }
-
   protected function buildSideNavView() {
     $menu = $this->buildMenu($for_devices = false);
     return AphrontSideNavFilterView::newFromMenu($menu);
   }
 
-  protected function buildApplicationMenu() {
+  public function buildApplicationMenu() {
     return $this->buildMenu($for_devices = true);
   }
 

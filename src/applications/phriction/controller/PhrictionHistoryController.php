@@ -5,6 +5,10 @@ final class PhrictionHistoryController
 
   private $slug;
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->slug = $data['slug'];
   }
@@ -83,7 +87,7 @@ final class PhrictionHistoryController
           $color = 'green';
           break;
         default:
-          throw new Exception('Unknown change type!');
+          throw new Exception(pht('Unknown change type!'));
           break;
       }
 

@@ -1,6 +1,6 @@
 <?php
 
-final class DifferentialLintStatus {
+final class DifferentialLintStatus extends Phobject {
 
   const LINT_NONE             = 0;
   const LINT_OKAY             = 1;
@@ -8,5 +8,6 @@ final class DifferentialLintStatus {
   const LINT_FAIL             = 3;
   const LINT_SKIP             = 4;
   const LINT_POSTPONED        = 5;
+  const LINT_AUTO_SKIP        = 6;
 
 }

@@ -11,24 +11,24 @@ final class ConpherenceCreateThreadConduitAPIMethod
     return pht('Create a new conpherence thread.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array(
       'title' => 'optional string',
       'message' => 'required string',
-      'participantPHIDs' => 'required list<phids>'
+      'participantPHIDs' => 'required list<phids>',
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'nonempty dict';
   }
 
-  public function defineErrorTypes() {
+  protected function defineErrorTypes() {
     return array(
       'ERR_EMPTY_PARTICIPANT_PHIDS' => pht(
         'You must specify participant phids.'),
       'ERR_EMPTY_MESSAGE' => pht(
-        'You must specify a message.')
+        'You must specify a message.'),
     );
   }
 
@@ -37,7 +37,7 @@ final class ConpherenceCreateThreadConduitAPIMethod
     $message = $request->getValue('message');
     $title = $request->getValue('title');
 
-    list($errors, $conpherence) = ConpherenceEditor::createConpherence(
+    list($errors, $conpherence) = ConpherenceEditor::createThread(
       $request->getUser(),
       $participant_phids,
       $title,

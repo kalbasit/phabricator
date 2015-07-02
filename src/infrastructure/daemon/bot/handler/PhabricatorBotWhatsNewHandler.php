@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Responds to "Whats new?" with some recent feed content
+ * Responds to "Whats new?" with some recent feed content.
  */
 final class PhabricatorBotWhatsNewHandler extends PhabricatorBotHandler {
 
@@ -30,7 +30,7 @@ final class PhabricatorBotWhatsNewHandler extends PhabricatorBotHandler {
       'feed.query',
       array(
         'limit' => 5,
-        'view'  => 'text'
+        'view'  => 'text',
       ));
 
     foreach ($latest as $feed_item) {

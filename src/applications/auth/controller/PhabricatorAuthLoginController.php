@@ -68,7 +68,9 @@ final class PhabricatorAuthLoginController
 
     if (!$account) {
       throw new Exception(
-        'Auth provider failed to load an account from processLoginRequest()!');
+        pht(
+          'Auth provider failed to load an account from %s!',
+          'processLoginRequest()'));
     }
 
     if ($account->getUserPHID()) {
@@ -94,7 +96,7 @@ final class PhabricatorAuthLoginController
       } else {
         return $this->renderError(
           pht(
-            'The external account ("%s") you just used to login is alerady '.
+            'The external account ("%s") you just used to login is already '.
             'associated with another Phabricator user account. Login to the '.
             'other Phabricator account and unlink the external account before '.
             'linking it to a new Phabricator account.',
@@ -164,7 +166,7 @@ final class PhabricatorAuthLoginController
     $next_uri) {
 
     if ($account->getUserPHID()) {
-      throw new Exception('Account is already registered or linked.');
+      throw new Exception(pht('Account is already registered or linked.'));
     }
 
     // Regenerate the registration secret key, set it on the external account,
@@ -217,6 +219,7 @@ final class PhabricatorAuthLoginController
     $content) {
 
     $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->setBorder(true);
 
     if ($this->getRequest()->getUser()->isLoggedIn()) {
       $crumbs->addTextCrumb(pht('Link Account'), $provider->getSettingsURI());

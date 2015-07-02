@@ -1,7 +1,9 @@
 <?php
 
 final class NuanceSource extends NuanceDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface {
 
   protected $name;
   protected $type;
@@ -10,11 +12,21 @@ final class NuanceSource extends NuanceDAO
   protected $viewPolicy;
   protected $editPolicy;
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'data' => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'name' => 'text255?',
+        'type' => 'text32',
+        'mailKey' => 'bytes20',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_type' => array(
+          'columns' => array('type', 'dateModified'),
+        ),
       ),
     ) + parent::getConfiguration();
   }
@@ -45,14 +57,37 @@ final class NuanceSource extends NuanceDAO
     $edit_policy = $app->getPolicy(
       NuanceSourceDefaultEditCapability::CAPABILITY);
 
-    $definitions = NuanceSourceDefinition::getAllDefinitions();
-    $lucky_definition = head($definitions);
-
     return id(new NuanceSource())
       ->setViewPolicy($view_policy)
-      ->setEditPolicy($edit_policy)
-      ->setType($lucky_definition->getSourceTypeConstant());
+      ->setEditPolicy($edit_policy);
   }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new NuanceSourceEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new NuanceSourceTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
+  }
+
+
+/* -(  PhabricatorPolicyInterface  )----------------------------------------- */
+
 
   public function getCapabilities() {
     return array(

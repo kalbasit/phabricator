@@ -11,14 +11,14 @@ final class PhabricatorChatLogApplication extends PhabricatorApplication {
   }
 
   public function getShortDescription() {
-    return pht('IRC Logs');
+    return pht('(Deprecated)');
   }
 
-  public function getIconName() {
-    return 'chatlog';
+  public function getFontIcon() {
+    return 'fa-coffee';
   }
 
-  public function isBeta() {
+  public function isPrototype() {
     return true;
   }
 

@@ -78,7 +78,7 @@ final class PhragmentBrowseController extends PhragmentController {
           $item->addAttribute(pht('Deleted'));
         }
       } else {
-        $item->addAttribute('Directory');
+        $item->addAttribute(pht('Directory'));
       }
       $list->addItem($item);
     }
@@ -88,7 +88,8 @@ final class PhragmentBrowseController extends PhragmentController {
         $crumbs,
         $this->renderConfigurationWarningIfRequired(),
         $current_box,
-        $list),
+        $list,
+      ),
       array(
         'title' => pht('Browse Fragments'),
       ));

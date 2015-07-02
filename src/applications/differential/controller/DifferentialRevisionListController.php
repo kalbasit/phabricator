@@ -13,13 +13,24 @@ final class DifferentialRevisionListController extends DifferentialController {
   }
 
   public function processRequest() {
-    $request = $this->getRequest();
-    $controller = id(new PhabricatorApplicationSearchController($request))
+    $controller = id(new PhabricatorApplicationSearchController())
       ->setQueryKey($this->queryKey)
       ->setSearchEngine(new DifferentialRevisionSearchEngine())
       ->setNavigation($this->buildSideNavView());
 
     return $this->delegateToController($controller);
+  }
+
+  protected function buildApplicationCrumbs() {
+    $crumbs = parent::buildApplicationCrumbs();
+
+    $crumbs->addAction(
+      id(new PHUIListItemView())
+        ->setHref($this->getApplicationURI('/diff/create/'))
+        ->setName(pht('Create Diff'))
+        ->setIcon('fa-plus-square'));
+
+    return $crumbs;
   }
 
 }

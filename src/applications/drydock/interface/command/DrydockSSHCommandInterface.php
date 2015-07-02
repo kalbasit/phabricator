@@ -3,6 +3,7 @@
 final class DrydockSSHCommandInterface extends DrydockCommandInterface {
 
   private $passphraseSSHKey;
+  private $connectTimeout;
 
   private function openCredentialsIfNotOpen() {
     if ($this->passphraseSSHKey !== null) {
@@ -15,9 +16,16 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       ->needSecrets(true)
       ->executeOne();
 
+    if ($credential === null) {
+      throw new Exception(
+        pht(
+          'There is no credential with ID %d.',
+          $this->getConfig('credential')));
+    }
+
     if ($credential->getProvidesType() !==
-      PassphraseCredentialTypeSSHPrivateKey::PROVIDES_TYPE) {
-      throw new Exception('Only private key credentials are supported.');
+      PassphraseSSHPrivateKeyCredentialType::PROVIDES_TYPE) {
+      throw new Exception(pht('Only private key credentials are supported.'));
     }
 
     $this->passphraseSSHKey = PassphraseSSHKey::loadFromPHID(
@@ -25,27 +33,33 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
       PhabricatorUser::getOmnipotentUser());
   }
 
+  public function setConnectTimeout($timeout) {
+    $this->connectTimeout = $timeout;
+    return $this;
+  }
+
   public function getExecFuture($command) {
     $this->openCredentialsIfNotOpen();
 
     $argv = func_get_args();
-
-    // This assumes there's a UNIX shell living at the other
-    // end of the connection, which isn't the case for Windows machines.
-    if ($this->getConfig('platform') !== 'windows') {
-      $argv = $this->applyWorkingDirectoryToArgv($argv);
-    }
-
+    $argv = $this->applyWorkingDirectoryToArgv($argv);
     $full_command = call_user_func_array('csprintf', $argv);
 
-    if ($this->getConfig('platform') === 'windows') {
-      // On Windows platforms we need to execute cmd.exe explicitly since
-      // most commands are not really executables.
-      $full_command = 'C:\\Windows\\system32\\cmd.exe /C '.$full_command;
+    $command_timeout = '';
+    if ($this->connectTimeout !== null) {
+      $command_timeout = csprintf(
+        '-o %s',
+        'ConnectTimeout='.$this->connectTimeout);
     }
 
     return new ExecFuture(
-      'ssh -o StrictHostKeyChecking=no -p %s -i %P %P@%s -- %s',
+      'ssh '.
+      '-o LogLevel=quiet '.
+      '-o StrictHostKeyChecking=no '.
+      '-o UserKnownHostsFile=/dev/null '.
+      '-o BatchMode=yes '.
+      '%C -p %s -i %P %P@%s -- %s',
+      $command_timeout,
       $this->getConfig('port'),
       $this->passphraseSSHKey->getKeyfileEnvelope(),
       $this->passphraseSSHKey->getUsernameEnvelope(),

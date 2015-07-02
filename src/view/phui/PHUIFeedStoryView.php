@@ -15,6 +15,16 @@ final class PHUIFeedStoryView extends AphrontView {
   private $projects = array();
   private $actions = array();
   private $chronologicalKey;
+  private $tags;
+
+  public function setTags($tags) {
+    $this->tags = $tags;
+    return $this;
+  }
+
+  public function getTags() {
+    return $this->tags;
+  }
 
   public function setChronologicalKey($chronological_key) {
     $this->chronologicalKey = $chronological_key;
@@ -42,6 +52,10 @@ final class PHUIFeedStoryView extends AphrontView {
   public function setImage($image) {
     $this->image = $image;
     return $this;
+  }
+
+  public function getImage() {
+    return $this->image;
   }
 
   public function setImageHref($image_href) {
@@ -94,7 +108,8 @@ final class PHUIFeedStoryView extends AphrontView {
         ),
         array(
           $title,
-          $text));
+          $text,
+        ));
     $this->appendChild($copy);
     return $this;
   }
@@ -117,7 +132,8 @@ final class PHUIFeedStoryView extends AphrontView {
         $foot = phutil_tag(
           'span',
           array(
-            'class' => 'phabricator-notification-date'),
+            'class' => 'phabricator-notification-date',
+          ),
           $foot);
       } else {
         $foot = null;
@@ -180,9 +196,8 @@ final class PHUIFeedStoryView extends AphrontView {
 
     $icon = null;
     if ($this->appIcon) {
-      $icon = new PHUIIconView();
-      $icon->setSpriteIcon($this->appIcon);
-      $icon->setSpriteSheet(PHUIIconView::SPRITE_APPS);
+      $icon = id(new PHUIIconView())
+        ->setIconFont($this->appIcon);
     }
 
     $action_list = array();
@@ -191,15 +206,15 @@ final class PHUIFeedStoryView extends AphrontView {
       $action_list[] = phutil_tag(
         'li',
           array(
-          'class' => 'phui-feed-story-action-item'
-        ),
-        $action);
+            'class' => 'phui-feed-story-action-item',
+          ),
+          $action);
     }
     if (!empty($action_list)) {
       $icons = phutil_tag(
         'ul',
           array(
-            'class' => 'phui-feed-story-action-list'
+            'class' => 'phui-feed-story-action-list',
           ),
           $action_list);
     }
@@ -219,7 +234,7 @@ final class PHUIFeedStoryView extends AphrontView {
       $tokenview = phutil_tag(
         'div',
           array(
-            'class' => 'phui-feed-token-bar'
+            'class' => 'phui-feed-token-bar',
           ),
         $this->tokenBar);
       $this->appendChild($tokenview);
@@ -230,9 +245,17 @@ final class PHUIFeedStoryView extends AphrontView {
       $body = phutil_tag(
         'div',
         array(
-          'class' => 'phui-feed-story-body',
+          'class' => 'phui-feed-story-body phabricator-remarkup',
         ),
         $body_content);
+    }
+
+    $tags = null;
+    if ($this->tags) {
+      $tags = array(
+        " \xC2\xB7 ",
+        $this->tags,
+      );
     }
 
     $foot = phutil_tag(
@@ -242,7 +265,9 @@ final class PHUIFeedStoryView extends AphrontView {
       ),
       array(
         $icon,
-        $foot));
+        $foot,
+        $tags,
+      ));
 
     $classes = array('phui-feed-story');
 
@@ -253,23 +278,4 @@ final class PHUIFeedStoryView extends AphrontView {
       ->appendChild(array($head, $body, $foot));
   }
 
-  public function setAppIconFromPHID($phid) {
-    switch (phid_get_type($phid)) {
-      case PholioMockPHIDType::TYPECONST:
-        $this->setAppIcon('pholio-dark');
-        break;
-      case PhabricatorMacroMacroPHIDType::TYPECONST:
-        $this->setAppIcon('macro-dark');
-        break;
-      case ManiphestTaskPHIDType::TYPECONST:
-        $this->setAppIcon('maniphest-dark');
-        break;
-      case DifferentialRevisionPHIDType::TYPECONST:
-        $this->setAppIcon('differential-dark');
-        break;
-      case PhabricatorCalendarEventPHIDType::TYPECONST:
-        $this->setAppIcon('calendar-dark');
-        break;
-    }
-  }
 }

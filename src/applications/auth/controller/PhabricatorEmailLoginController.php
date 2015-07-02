@@ -58,6 +58,26 @@ final class PhabricatorEmailLoginController
           $e_email = pht('Invalid');
         }
 
+        // If this address is unverified, only send a reset link to it if
+        // the account has no verified addresses. This prevents an opportunistic
+        // attacker from compromising an account if a user adds an email
+        // address but mistypes it and doesn't notice.
+
+        // (For a newly created account, all the addresses may be unverified,
+        // which is why we'll send to an unverified address in that case.)
+
+        if ($target_email && !$target_email->getIsVerified()) {
+          $verified_addresses = id(new PhabricatorUserEmail())->loadAllWhere(
+            'userPHID = %s AND isVerified = 1',
+            $target_email->getUserPHID());
+          if ($verified_addresses) {
+            $errors[] = pht(
+              'That email address is not verified. You can only send '.
+              'password reset links to a verified address.');
+            $e_email = pht('Unverified');
+          }
+        }
+
         if (!$errors) {
           $engine = new PhabricatorAuthSessionEngine();
           $uri = $engine->getOneTimeLoginURI(
@@ -66,34 +86,27 @@ final class PhabricatorEmailLoginController
             PhabricatorAuthSessionEngine::ONETIME_RESET);
 
           if ($is_serious) {
-            $body = <<<EOBODY
-You can use this link to reset your Phabricator password:
-
-  {$uri}
-
-EOBODY;
+            $body = pht(
+              "You can use this link to reset your Phabricator password:".
+              "\n\n  %s\n",
+              $uri);
           } else {
-            $body = <<<EOBODY
-Condolences on forgetting your password. You can use this link to reset it:
+            $body = pht(
+              "Condolences on forgetting your password. You can use this ".
+              "link to reset it:\n\n".
+              "  %s\n\n".
+              "After you set a new password, consider writing it down on a ".
+              "sticky note and attaching it to your monitor so you don't ".
+              "forget again! Choosing a very short, easy-to-remember password ".
+              "like \"cat\" or \"1234\" might also help.\n\n".
+              "Best Wishes,\nPhabricator\n",
+              $uri);
 
-  {$uri}
-
-After you set a new password, consider writing it down on a sticky note and
-attaching it to your monitor so you don't forget again! Choosing a very short,
-easy-to-remember password like "cat" or "1234" might also help.
-
-Best Wishes,
-Phabricator
-
-EOBODY;
           }
-
-          // NOTE: Don't set the user as 'from', or they may not receive the
-          // mail if they have the "don't send me email about my own actions"
-          // preference set.
 
           $mail = id(new PhabricatorMetaMTAMail())
             ->setSubject(pht('[Phabricator] Password Reset'))
+            ->setForceDelivery(true)
             ->addRawTos(array($target_email->getAddress()))
             ->setBody($body)
             ->saveAndSend();
@@ -106,12 +119,11 @@ EOBODY;
             ->addCancelButton('/', pht('Done'));
         }
       }
-
     }
 
     $error_view = null;
     if ($errors) {
-      $error_view = new AphrontErrorView();
+      $error_view = new PHUIInfoView();
       $error_view->setErrors($errors);
     }
 
@@ -136,8 +148,7 @@ EOBODY;
 
     $dialog = new AphrontDialogView();
     $dialog->setUser($request->getUser());
-    $dialog->setTitle(pht(
-      'Forgot Password / Email Login'));
+    $dialog->setTitle(pht('Forgot Password / Email Login'));
     $dialog->appendChild($email_auth);
     $dialog->addSubmitButton(pht('Send Email'));
     $dialog->setSubmitURI('/login/email/');

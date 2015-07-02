@@ -1,7 +1,11 @@
 <?php
 
 final class PassphraseCredential extends PassphraseDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface,
+    PhabricatorDestructibleInterface,
+    PhabricatorSpacesInterface {
 
   protected $name;
   protected $credentialType;
@@ -13,26 +17,62 @@ final class PassphraseCredential extends PassphraseDAO
   protected $secretID;
   protected $isDestroyed;
   protected $isLocked = 0;
+  protected $allowConduit = 0;
+  protected $authorPHID;
+  protected $spacePHID;
 
   private $secret = self::ATTACHABLE;
 
   public static function initializeNewCredential(PhabricatorUser $actor) {
+    $app = id(new PhabricatorApplicationQuery())
+      ->setViewer($actor)
+      ->withClasses(array('PhabricatorPassphraseApplication'))
+      ->executeOne();
+
+    $view_policy = $app->getPolicy(PassphraseDefaultViewCapability::CAPABILITY);
+    $edit_policy = $app->getPolicy(PassphraseDefaultEditCapability::CAPABILITY);
+
     return id(new PassphraseCredential())
       ->setName('')
       ->setUsername('')
       ->setDescription('')
       ->setIsDestroyed(0)
-      ->setViewPolicy($actor->getPHID())
-      ->setEditPolicy($actor->getPHID());
+      ->setAuthorPHID($actor->getPHID())
+      ->setViewPolicy($view_policy)
+      ->setEditPolicy($edit_policy)
+      ->setSpacePHID($actor->getDefaultSpacePHID());
   }
 
   public function getMonogram() {
     return 'K'.$this->getID();
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'name' => 'text255',
+        'credentialType' => 'text64',
+        'providesType' => 'text64',
+        'description' => 'text',
+        'username' => 'text255',
+        'secretID' => 'id?',
+        'isDestroyed' => 'bool',
+        'isLocked' => 'bool',
+        'allowConduit' => 'bool',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_secret' => array(
+          'columns' => array('secretID'),
+          'unique' => true,
+        ),
+        'key_type' => array(
+          'columns' => array('credentialType'),
+        ),
+        'key_provides' => array(
+          'columns' => array('providesType'),
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -53,6 +93,29 @@ final class PassphraseCredential extends PassphraseDAO
   public function getCredentialTypeImplementation() {
     $type = $this->getCredentialType();
     return PassphraseCredentialType::getTypeByConstant($type);
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PassphraseCredentialTransactionEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PassphraseCredentialTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 
@@ -81,6 +144,30 @@ final class PassphraseCredential extends PassphraseDAO
 
   public function describeAutomaticCapability($capability) {
     return null;
+  }
+
+/* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+      $secrets = id(new PassphraseSecret())->loadAllWhere(
+        'id = %d',
+        $this->getSecretID());
+      foreach ($secrets as $secret) {
+        $secret->delete();
+      }
+      $this->delete();
+    $this->saveTransaction();
+  }
+
+
+/* -(  PhabricatorSpacesInterface  )----------------------------------------- */
+
+
+  public function getSpacePHID() {
+    return $this->spacePHID;
   }
 
 }

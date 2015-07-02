@@ -3,44 +3,42 @@
 final class PHUIListExample extends PhabricatorUIExample {
 
   public function getName() {
-    return 'Lists';
+    return pht('Lists');
   }
 
   public function getDescription() {
-    return 'Create a fanciful list of objects and prismatic donuts.';
+    return pht('Create a fanciful list of objects and prismatic donuts.');
   }
 
   public function renderExample() {
-
-
     /* Action Menu */
 
     $action1 = id(new PHUIListItemView())
-      ->setName('Edit Document')
+      ->setName(pht('Edit Document'))
       ->setHref('#')
       ->setIcon('fa-pencil')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $action2 = id(new PHUIListItemView())
-      ->setName('Move Document')
+      ->setName(pht('Move Document'))
       ->setHref('#')
       ->setIcon('fa-arrows')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $action3 = id(new PHUIListItemView())
-      ->setName('Delete Document')
+      ->setName(pht('Delete Document'))
       ->setHref('#')
       ->setIcon('fa-times')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $action4 = id(new PHUIListItemView())
-      ->setName('View History')
+      ->setName(pht('View History'))
       ->setHref('#')
       ->setIcon('fa-list')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $action5 = id(new PHUIListItemView())
-      ->setName('Subscribe')
+      ->setName(pht('Subscribe'))
       ->setHref('#')
       ->setIcon('fa-plus-circle')
       ->setType(PHUIListItemView::TYPE_LINK);
@@ -57,34 +55,34 @@ final class PHUIListExample extends PhabricatorUIExample {
     /* Side Navigation */
 
     $label1 = id(new PHUIListItemView())
-      ->setName('Getting Started')
+      ->setName(pht('Getting Started'))
       ->setType(PHUIListItemView::TYPE_LABEL);
 
     $label2 = id(new PHUIListItemView())
-      ->setName('Documentation')
+      ->setName(pht('Documentation'))
       ->setType(PHUIListItemView::TYPE_LABEL);
 
     $item1 = id(new PHUIListItemView())
-      ->setName('Installation')
+      ->setName(pht('Installation'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item2 = id(new PHUIListItemView())
-      ->setName('Webserver Config')
+      ->setName(pht('Webserver Config'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item3 = id(new PHUIListItemView())
-      ->setName('Adding Users')
+      ->setName(pht('Adding Users'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item4 = id(new PHUIListItemView())
-      ->setName('Debugging')
+      ->setName(pht('Debugging'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
-    $divider = id(new PHUIListItemView)
+    $divider = id(new PHUIListItemView())
       ->setType(PHUIListItemView::TYPE_DIVIDER);
 
     $sidenav = id(new PHUIListView())
@@ -105,16 +103,16 @@ final class PHUIListExample extends PhabricatorUIExample {
     /* Unstyled */
 
     $item1 = id(new PHUIListItemView())
-      ->setName('Rain');
+      ->setName(pht('Rain'));
 
     $item2 = id(new PHUIListItemView())
-      ->setName('Spain');
+      ->setName(pht('Spain'));
 
     $item3 = id(new PHUIListItemView())
-      ->setName('Mainly');
+      ->setName(pht('Mainly'));
 
     $item4 = id(new PHUIListItemView())
-      ->setName('Plains');
+      ->setName(pht('Plains'));
 
     $unstyled = id(new PHUIListView())
       ->addMenuItem($item1)
@@ -130,61 +128,61 @@ final class PHUIListExample extends PhabricatorUIExample {
       ->setType(PHUIListItemView::TYPE_ICON);
 
     $item1 = id(new PHUIListItemView())
-      ->setName('Installation')
+      ->setName(pht('Installation'))
       ->setHref('#')
       ->setSelected(true)
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item2 = id(new PHUIListItemView())
-      ->setName('Webserver Config')
+      ->setName(pht('Webserver Config'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item3 = id(new PHUIListItemView())
-      ->setName('Adding Users')
+      ->setName(pht('Adding Users'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item4 = id(new PHUIListItemView())
-      ->setName('Debugging')
+      ->setName(pht('Debugging'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
         $item1 = id(new PHUIListItemView())
-      ->setName('Installation')
+      ->setName(pht('Installation'))
       ->setHref('#')
       ->setSelected(true)
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $item2 = id(new PHUIListItemView())
-      ->setName('Webserver Config')
+      ->setName(pht('Webserver Config'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $details1 = id(new PHUIListItemView())
-      ->setName('Details')
+      ->setName(pht('Details'))
       ->setHref('#')
       ->setSelected(true)
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $details2 = id(new PHUIListItemView())
-      ->setName('Lint (OK)')
+      ->setName(pht('Lint (OK)'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $details3 = id(new PHUIListItemView())
-      ->setName('Unit (5/5)')
+      ->setName(pht('Unit (5/5)'))
       ->setHref('#')
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $details4 = id(new PHUIListItemView())
-      ->setName('Lint (Warn)')
+      ->setName(pht('Lint (Warn)'))
       ->setHref('#')
       ->setStatusColor(PHUIListItemView::STATUS_WARN)
       ->setType(PHUIListItemView::TYPE_LINK);
 
     $details5 = id(new PHUIListItemView())
-      ->setName('Unit (3/5)')
+      ->setName(pht('Unit (3/5)'))
       ->setHref('#')
       ->setStatusColor(PHUIListItemView::STATUS_FAIL)
       ->setType(PHUIListItemView::TYPE_LINK);
@@ -211,35 +209,40 @@ final class PHUIListExample extends PhabricatorUIExample {
           ->appendChild($unstyled)
           ->addMargin(PHUI::MARGIN_MEDIUM)
           ->addPadding(PHUI::PADDING_SMALL)
-          ->setBorder(true));
+          ->setBorder(true),
+      );
 
     $layout2 =
       array(
         id(new PHUIBoxView())
           ->appendChild($sidenav)
           ->addMargin(PHUI::MARGIN_MEDIUM)
-          ->setBorder(true));
+          ->setBorder(true),
+      );
 
     $layout3 =
       array(
         id(new PHUIBoxView())
           ->appendChild($topnav)
           ->addMargin(PHUI::MARGIN_MEDIUM)
-          ->setBorder(true));
+          ->setBorder(true),
+      );
 
     $layout4 =
       array(
         id(new PHUIBoxView())
           ->appendChild($actionmenu)
           ->addMargin(PHUI::MARGIN_MEDIUM)
-          ->setBorder(true));
+          ->setBorder(true),
+      );
 
     $layout5 =
       array(
         id(new PHUIBoxView())
           ->appendChild($statustabs)
           ->addMargin(PHUI::MARGIN_MEDIUM)
-          ->setBorder(true));
+          ->setBorder(true),
+      );
 
     $head1 = id(new PHUIHeaderView())
       ->setHeader(pht('Unstyled'));
@@ -291,7 +294,7 @@ final class PHUIListExample extends PhabricatorUIExample {
           $head5,
           $wrap5,
           $head4,
-          $wrap4
+          $wrap4,
         ));
-        }
+  }
 }

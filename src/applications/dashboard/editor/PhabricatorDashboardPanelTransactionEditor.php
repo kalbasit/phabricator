@@ -3,6 +3,14 @@
 final class PhabricatorDashboardPanelTransactionEditor
   extends PhabricatorApplicationTransactionEditor {
 
+  public function getEditorApplicationClass() {
+    return 'PhabricatorDashboardApplication';
+  }
+
+  public function getEditorObjectsDescription() {
+    return pht('Dashboard Panels');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -54,12 +62,6 @@ final class PhabricatorDashboardPanelTransactionEditor
       case PhabricatorDashboardPanelTransaction::TYPE_ARCHIVE:
         $object->setIsArchived((int)$xaction->getNewValue());
         return;
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-        $object->setViewPolicy($xaction->getNewValue());
-        return;
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
-        $object->setEditPolicy($xaction->getNewValue());
-        return;
     }
 
     return parent::applyCustomInternalTransaction($object, $xaction);
@@ -72,8 +74,6 @@ final class PhabricatorDashboardPanelTransactionEditor
     switch ($xaction->getTransactionType()) {
       case PhabricatorDashboardPanelTransaction::TYPE_NAME:
       case PhabricatorDashboardPanelTransaction::TYPE_ARCHIVE:
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
         return;
     }
 

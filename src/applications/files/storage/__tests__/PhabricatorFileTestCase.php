@@ -2,10 +2,123 @@
 
 final class PhabricatorFileTestCase extends PhabricatorTestCase {
 
-  public function getPhabricatorTestCaseConfiguration() {
+  protected function getPhabricatorTestCaseConfiguration() {
     return array(
       self::PHABRICATOR_TESTCONFIG_BUILD_STORAGE_FIXTURES => true,
     );
+  }
+
+  public function testFileVisibility() {
+    $engine = new PhabricatorTestStorageEngine();
+    $data = Filesystem::readRandomCharacters(64);
+
+    $author = $this->generateNewTestUser();
+    $viewer = $this->generateNewTestUser();
+    $users = array($author, $viewer);
+
+    $params = array(
+      'name' => 'test.dat',
+      'viewPolicy' => PhabricatorPolicies::POLICY_NOONE,
+      'authorPHID' => $author->getPHID(),
+      'storageEngines' => array(
+        $engine,
+      ),
+    );
+
+    $file = PhabricatorFile::newFromFileData($data, $params);
+    $filter = new PhabricatorPolicyFilter();
+
+    // Test bare file policies.
+    $this->assertEqual(
+      array(
+        true,
+        false,
+      ),
+      $this->canViewFile($users, $file),
+      pht('File Visibility'));
+
+    // Create an object and test object policies.
+
+    $object = ManiphestTask::initializeNewTask($author);
+    $object->setViewPolicy(PhabricatorPolicies::getMostOpenPolicy());
+    $object->save();
+
+    $this->assertTrue(
+      $filter->hasCapability(
+        $author,
+        $object,
+        PhabricatorPolicyCapability::CAN_VIEW),
+      pht('Object Visible to Author'));
+
+    $this->assertTrue(
+      $filter->hasCapability(
+        $viewer,
+        $object,
+        PhabricatorPolicyCapability::CAN_VIEW),
+      pht('Object Visible to Others'));
+
+    // Attach the file to the object and test that the association opens a
+    // policy exception for the non-author viewer.
+
+    $file->attachToObject($object->getPHID());
+
+    // Test the attached file's visibility.
+    $this->assertEqual(
+      array(
+        true,
+        true,
+      ),
+      $this->canViewFile($users, $file),
+      pht('Attached File Visibility'));
+
+    // Create a "thumbnail" of the original file.
+    $params = array(
+      'name' => 'test.thumb.dat',
+      'viewPolicy' => PhabricatorPolicies::POLICY_NOONE,
+      'storageEngines' => array(
+        $engine,
+      ),
+    );
+
+    $xform = PhabricatorFile::newFromFileData($data, $params);
+
+    id(new PhabricatorTransformedFile())
+      ->setOriginalPHID($file->getPHID())
+      ->setTransform('test-thumb')
+      ->setTransformedPHID($xform->getPHID())
+      ->save();
+
+    // Test the thumbnail's visibility.
+    $this->assertEqual(
+      array(
+        true,
+        true,
+      ),
+      $this->canViewFile($users, $xform),
+      pht('Attached Thumbnail Visibility'));
+
+    // Detach the object and make sure it affects the thumbnail.
+    $file->detachFromObject($object->getPHID());
+
+    // Test the detached thumbnail's visibility.
+    $this->assertEqual(
+      array(
+        true,
+        false,
+      ),
+      $this->canViewFile($users, $xform),
+      pht('Detached Thumbnail Visibility'));
+  }
+
+  private function canViewFile(array $users, PhabricatorFile $file) {
+    $results = array();
+    foreach ($users as $user) {
+      $results[] = (bool)id(new PhabricatorFileQuery())
+        ->setViewer($user)
+        ->withPHIDs(array($file->getPHID()))
+        ->execute();
+    }
+    return $results;
   }
 
   public function testFileStorageReadWrite() {
@@ -48,7 +161,7 @@ final class PhabricatorFileTestCase extends PhabricatorTestCase {
 
     $second_file = PhabricatorFile::newFromFileData($other_data, $params);
 
-    // Test that the the second file uses  different storage handle from
+    // Test that the second file uses  different storage handle from
     // the first file.
     $first_handle = $first_file->getStorageHandle();
     $second_handle = $second_file->getStorageHandle();
@@ -72,7 +185,7 @@ final class PhabricatorFileTestCase extends PhabricatorTestCase {
 
     $second_file = PhabricatorFile::newFromFileData($data, $params);
 
-    // Test that the the second file uses the same storage handle as
+    // Test that the second file uses the same storage handle as
     // the first file.
     $handle = $first_file->getStorageHandle();
     $second_handle = $second_file->getStorageHandle();

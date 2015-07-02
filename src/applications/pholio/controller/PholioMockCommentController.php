@@ -51,7 +51,7 @@ final class PholioMockCommentController extends PholioController {
 
     foreach ($inline_comments as $inline_comment) {
       $xactions[] = id(new PholioTransaction())
-        ->setTransactionType(PholioTransactionType::TYPE_INLINE)
+        ->setTransactionType(PholioTransaction::TYPE_INLINE)
         ->attachComment($inline_comment);
     }
 
@@ -81,8 +81,7 @@ final class PholioMockCommentController extends PholioController {
         ->setViewer($user)
         ->setTransactions($xactions)
         ->setTransactionView($xaction_view)
-        ->setIsPreview($is_preview)
-        ->setAnchorOffset($request->getStr('anchor'));
+        ->setIsPreview($is_preview);
     } else {
       return id(new AphrontRedirectResponse())->setURI($mock_uri);
     }

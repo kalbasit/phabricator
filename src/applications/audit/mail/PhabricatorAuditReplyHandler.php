@@ -1,51 +1,21 @@
 <?php
 
-final class PhabricatorAuditReplyHandler extends PhabricatorMailReplyHandler {
+final class PhabricatorAuditReplyHandler
+  extends PhabricatorApplicationTransactionReplyHandler {
 
   public function validateMailReceiver($mail_receiver) {
     if (!($mail_receiver instanceof PhabricatorRepositoryCommit)) {
-      throw new Exception('Mail receiver is not a commit!');
+      throw new Exception(
+        pht(
+          'Mail receiver is not a %s!',
+          'PhabricatorRepositoryCommit'));
     }
   }
 
-  public function getPrivateReplyHandlerEmailAddress(
-    PhabricatorObjectHandle $handle) {
-    return $this->getDefaultPrivateReplyHandlerEmailAddress($handle, 'C');
-  }
-
-  public function getPublicReplyHandlerEmailAddress() {
-    return $this->getDefaultPublicReplyHandlerEmailAddress('C');
-  }
-
-  public function getReplyHandlerDomain() {
-    return PhabricatorEnv::getEnvConfig(
-      'metamta.diffusion.reply-handler-domain');
-  }
-
-  public function getReplyHandlerInstructions() {
-    if ($this->supportsReplies()) {
-      return pht('Reply to comment.');
-    } else {
-      return null;
-    }
-  }
-
-  protected function receiveEmail(PhabricatorMetaMTAReceivedMail $mail) {
-    $commit = $this->getMailReceiver();
-    $actor = $this->getActor();
-
-    // TODO: Support !raise, !accept, etc.
-    // TODO: Content sources.
-
-    $comment = id(new PhabricatorAuditComment())
-      ->setAction(PhabricatorAuditActionConstants::COMMENT)
-      ->setContent($mail->getCleanTextBody());
-
-    $editor = new PhabricatorAuditCommentEditor($commit);
-    $editor->setActor($actor);
-    $editor->setExcludeMailRecipientPHIDs(
-      $this->getExcludeMailRecipientPHIDs());
-    $editor->addComment($comment);
+  public function getObjectPrefix() {
+    // TODO: This conflicts with Countdown and will probably need to be
+    // changed eventually.
+    return 'C';
   }
 
 }

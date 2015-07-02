@@ -55,35 +55,47 @@ only screen and (-webkit-min-device-pixel-ratio: 1.5) {
 }
 
 .login-HTTP {
-  background-position: 0px -70px;
+  background-position: -140px -35px;
 }
 
 .login-Jira {
-  background-position: -35px -70px;
+  background-position: 0px -70px;
 }
 
 .login-LDAP {
-  background-position: -70px -70px;
+  background-position: -35px -70px;
 }
 
 .login-Linkedin {
-  background-position: -105px -70px;
+  background-position: -70px -70px;
 }
 
 .login-MediaWiki {
-  background-position: 0px -105px;
+  background-position: -105px -70px;
 }
 
 .login-Openid {
-  background-position: -35px -105px;
+  background-position: -140px -70px;
+}
+
+.login-PayPal {
+  background-position: 0px -105px;
 }
 
 .login-Persona {
-  background-position: -70px -105px;
+  background-position: -35px -105px;
 }
 
 .login-Phabricator {
+  background-position: -70px -105px;
+}
+
+.login-Stripe {
   background-position: -105px -105px;
+}
+
+.login-TestPayment {
+  background-position: -140px -105px;
 }
 
 .login-TwitchTV {
@@ -94,10 +106,14 @@ only screen and (-webkit-min-device-pixel-ratio: 1.5) {
   background-position: -35px -140px;
 }
 
-.login-WordPressCOM {
+.login-WePay {
   background-position: -70px -140px;
 }
 
-.login-Yahoo {
+.login-WordPressCOM {
   background-position: -105px -140px;
+}
+
+.login-Yahoo {
+  background-position: -140px -140px;
 }

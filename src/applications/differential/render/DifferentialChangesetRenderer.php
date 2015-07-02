@@ -1,12 +1,13 @@
 <?php
 
-abstract class DifferentialChangesetRenderer {
+abstract class DifferentialChangesetRenderer extends Phobject {
 
   private $user;
   private $changeset;
   private $renderingReference;
   private $renderPropertyChangeHeader;
   private $isTopLevel;
+  private $isUndershield;
   private $hunkStartLines;
   private $oldLines;
   private $newLines;
@@ -29,6 +30,33 @@ abstract class DifferentialChangesetRenderer {
   private $mask;
   private $depths;
   private $originalCharacterEncoding;
+  private $showEditAndReplyLinks;
+  private $canMarkDone;
+  private $objectOwnerPHID;
+  private $highlightingDisabled;
+
+  private $oldFile = false;
+  private $newFile = false;
+
+  abstract public function getRendererKey();
+
+  public function setShowEditAndReplyLinks($bool) {
+    $this->showEditAndReplyLinks = $bool;
+    return $this;
+  }
+
+  public function getShowEditAndReplyLinks() {
+    return $this->showEditAndReplyLinks;
+  }
+
+  public function setHighlightingDisabled($highlighting_disabled) {
+    $this->highlightingDisabled = $highlighting_disabled;
+    return $this;
+  }
+
+  public function getHighlightingDisabled() {
+    return $this->highlightingDisabled;
+  }
 
   public function setOriginalCharacterEncoding($original_character_encoding) {
     $this->originalCharacterEncoding = $original_character_encoding;
@@ -37,6 +65,15 @@ abstract class DifferentialChangesetRenderer {
 
   public function getOriginalCharacterEncoding() {
     return $this->originalCharacterEncoding;
+  }
+
+  public function setIsUndershield($is_undershield) {
+    $this->isUndershield = $is_undershield;
+    return $this;
+  }
+
+  public function getIsUndershield() {
+    return $this->isUndershield;
   }
 
   public function setDepths($depths) {
@@ -61,6 +98,38 @@ abstract class DifferentialChangesetRenderer {
   }
   protected function getGaps() {
     return $this->gaps;
+  }
+
+  public function attachOldFile(PhabricatorFile $old = null) {
+    $this->oldFile = $old;
+    return $this;
+  }
+
+  public function getOldFile() {
+    if ($this->oldFile === false) {
+      throw new PhabricatorDataNotAttachedException($this);
+    }
+    return $this->oldFile;
+  }
+
+  public function hasOldFile() {
+    return (bool)$this->oldFile;
+  }
+
+  public function attachNewFile(PhabricatorFile $new = null) {
+    $this->newFile = $new;
+    return $this;
+  }
+
+  public function getNewFile() {
+    if ($this->newFile === false) {
+      throw new PhabricatorDataNotAttachedException($this);
+    }
+    return $this->newFile;
+  }
+
+  public function hasNewFile() {
+    return (bool)$this->newFile;
   }
 
   public function setOriginalNew($original_new) {
@@ -243,6 +312,7 @@ abstract class DifferentialChangesetRenderer {
     $this->renderPropertyChangeHeader = $should_render;
     return $this;
   }
+
   private function shouldRenderPropertyChangeHeader() {
     return $this->renderPropertyChangeHeader;
   }
@@ -251,8 +321,27 @@ abstract class DifferentialChangesetRenderer {
     $this->isTopLevel = $is;
     return $this;
   }
+
   private function getIsTopLevel() {
     return $this->isTopLevel;
+  }
+
+  public function setCanMarkDone($can_mark_done) {
+    $this->canMarkDone = $can_mark_done;
+    return $this;
+  }
+
+  public function getCanMarkDone() {
+    return $this->canMarkDone;
+  }
+
+  public function setObjectOwnerPHID($phid) {
+    $this->objectOwnerPHID = $phid;
+    return $this;
+  }
+
+  public function getObjectOwnerPHID() {
+    return $this->objectOwnerPHID;
   }
 
   final public function renderChangesetTable($content) {
@@ -267,7 +356,12 @@ abstract class DifferentialChangesetRenderer {
       $notice = $this->renderChangeTypeHeader($force);
     }
 
-    $result = $notice.$props.$content;
+    $undershield = null;
+    if ($this->getIsUndershield()) {
+      $undershield = $this->renderUndershieldHeader();
+    }
+
+    $result = $notice.$props.$undershield.$content;
 
     // TODO: Let the user customize their tab width / display style.
     // TODO: We should possibly post-process "\r" as well.
@@ -289,6 +383,7 @@ abstract class DifferentialChangesetRenderer {
     $vs = 0);
 
   abstract protected function renderChangeTypeHeader($force);
+  abstract protected function renderUndershieldHeader();
 
   protected function didRenderChangesetTableContents($contents) {
     return $contents;
@@ -457,10 +552,6 @@ abstract class DifferentialChangesetRenderer {
           // Ignore it when rendering a one-up diff.
           continue;
         }
-        if ($new_buf) {
-          $out[] = $new_buf;
-          $new_buf = array();
-        }
         $old_buf[] = $primitive;
       } else if ($type == 'new') {
         if ($primitive['line'] === null) {
@@ -468,11 +559,24 @@ abstract class DifferentialChangesetRenderer {
           // old file. Ignore it when rendering a one-up diff.
           continue;
         }
-        if ($old_buf) {
-          $out[] = $old_buf;
-          $old_buf = array();
+        if (!$primitive['htype']) {
+          // If this line is the same in both versions of the file, put it in
+          // the old line buffer. This makes sure inlines on old, unchanged
+          // lines end up in the right place.
+
+          // First, we need to flush the line buffers if they're not empty.
+          if ($old_buf) {
+            $out[] = $old_buf;
+            $old_buf = array();
+          }
+          if ($new_buf) {
+            $out[] = $new_buf;
+            $new_buf = array();
+          }
+          $old_buf[] = $primitive;
+        } else {
+          $new_buf[] = $primitive;
         }
-        $new_buf[] = $primitive;
       } else if ($type == 'context' || $type == 'no-context') {
         $out[] = $old_buf;
         $out[] = $new_buf;
@@ -480,14 +584,22 @@ abstract class DifferentialChangesetRenderer {
         $new_buf = array();
         $out[] = array($primitive);
       } else if ($type == 'inline') {
-        $out[] = $old_buf;
-        $out[] = $new_buf;
-        $old_buf = array();
-        $new_buf = array();
 
-        $out[] = array($primitive);
+        // If this inline is on the left side, put it after the old lines.
+        if (!$primitive['right']) {
+          $out[] = $old_buf;
+          $out[] = array($primitive);
+          $old_buf = array();
+        } else {
+          $out[] = $old_buf;
+          $out[] = $new_buf;
+          $out[] = array($primitive);
+          $old_buf = array();
+          $new_buf = array();
+        }
+
       } else {
-        throw new Exception("Unknown primitive type '{$primitive}'!");
+        throw new Exception(pht("Unknown primitive type '%s'!", $primitive));
       }
     }
 
@@ -496,6 +608,60 @@ abstract class DifferentialChangesetRenderer {
     $out = array_mergev($out);
 
     return $out;
+  }
+
+  protected function getChangesetProperties($changeset) {
+    $old = $changeset->getOldProperties();
+    $new = $changeset->getNewProperties();
+
+    // When adding files, don't show the uninteresting 644 filemode change.
+    if ($changeset->getChangeType() == DifferentialChangeType::TYPE_ADD &&
+        $new == array('unix:filemode' => '100644')) {
+      unset($new['unix:filemode']);
+    }
+
+    // Likewise when removing files.
+    if ($changeset->getChangeType() == DifferentialChangeType::TYPE_DELETE &&
+        $old == array('unix:filemode' => '100644')) {
+      unset($old['unix:filemode']);
+    }
+
+    if ($this->hasOldFile()) {
+      $file = $this->getOldFile();
+      if ($file->getImageWidth()) {
+        $dimensions = $file->getImageWidth().'x'.$file->getImageHeight();
+        $old['file:dimensions'] = $dimensions;
+      }
+      $old['file:mimetype'] = $file->getMimeType();
+      $old['file:size'] = phutil_format_bytes($file->getByteSize());
+    }
+
+    if ($this->hasNewFile()) {
+      $file = $this->getNewFile();
+      if ($file->getImageWidth()) {
+        $dimensions = $file->getImageWidth().'x'.$file->getImageHeight();
+        $new['file:dimensions'] = $dimensions;
+      }
+      $new['file:mimetype'] = $file->getMimeType();
+      $new['file:size'] = phutil_format_bytes($file->getByteSize());
+    }
+
+    return array($old, $new);
+  }
+
+  public function renderUndoTemplates() {
+    $views = array(
+      'l' => id(new PHUIDiffInlineCommentUndoView())->setIsOnRight(false),
+      'r' => id(new PHUIDiffInlineCommentUndoView())->setIsOnRight(true),
+    );
+
+    foreach ($views as $key => $view) {
+      $scaffold = $this->getRowScaffoldForInline($view);
+      $views[$key] = id(new PHUIDiffInlineCommentTableScaffold())
+        ->addRowScaffold($scaffold);
+    }
+
+    return $views;
   }
 
 }

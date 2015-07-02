@@ -2,6 +2,10 @@
 
 final class PonderAnswerEditor extends PonderEditor {
 
+  public function getEditorObjectsDescription() {
+    return pht('Ponder Answers');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -94,7 +98,7 @@ final class PonderAnswerEditor extends PonderEditor {
       }
     }
 
-    $body->addTextSection(
+    $body->addLinkSection(
       pht('ANSWER DETAIL'),
       PhabricatorEnv::getProductionURI($object->getURI()));
 

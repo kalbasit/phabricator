@@ -7,10 +7,10 @@ final class MacroQueryConduitAPIMethod extends MacroConduitAPIMethod {
   }
 
   public function getMethodDescription() {
-    return 'Retrieve image macro information.';
+    return pht('Retrieve image macro information.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array(
       'authorPHIDs' => 'optional list<phid>',
       'phids'       => 'optional list<phid>',
@@ -20,18 +20,14 @@ final class MacroQueryConduitAPIMethod extends MacroConduitAPIMethod {
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'list<dict>';
   }
 
-  public function defineErrorTypes() {
-    return array(
-    );
-  }
-
   protected function execute(ConduitAPIRequest $request) {
-    $query = new PhabricatorMacroQuery();
-    $query->setViewer($request->getUser());
+    $query = id(new PhabricatorMacroQuery())
+      ->setViewer($request->getUser())
+      ->needFiles(true);
 
     $author_phids = $request->getValue('authorPHIDs');
     $phids = $request->getValue('phids');
@@ -72,7 +68,8 @@ final class MacroQueryConduitAPIMethod extends MacroConduitAPIMethod {
         'uri' => $file->getBestURI(),
         'phid' => $macro->getPHID(),
         'authorPHID' => $file->getAuthorPHID(),
-        'dateCreated'   => $file->getDateCreated(),
+        'dateCreated' => $file->getDateCreated(),
+        'filePHID' => $file->getPHID(),
       );
     }
 

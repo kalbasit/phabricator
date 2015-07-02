@@ -62,7 +62,7 @@
 
 .phui-timeline-title {
   line-height: 18px;
-  min-height: 18px;
+  min-height: 19px;
   position: relative;
   color: {$bluetext};
 }
@@ -92,6 +92,7 @@
 
 .phui-timeline-image {
   background-repeat: no-repeat;
+  background-size: 100%;
   position: absolute;
   border-radius: 3px;
 }
@@ -185,6 +186,15 @@
 .device .phui-timeline-spacer {
   min-height: 8px;
   border-width: 0;
+}
+
+.phui-timeline-spacer.phui-timeline-spacer-bold {
+  border-bottom: 4px solid {$lightblueborder};
+  margin: 0;
+}
+
+.phui-timeline-spacer-bold + .phui-timeline-spacer {
+  background-color: #ebecee;
 }
 
 .phui-timeline-icon-fill {
@@ -309,6 +319,7 @@
   text-align: center;
   padding: 12px;
   color: {$darkgreytext};
+  cursor: pointer;
 }
 
 .device-phone .phui-timeline-older-transactions-are-hidden {
@@ -359,4 +370,8 @@ a.phui-timeline-menu .phui-icon-view {
 
 .phui-timeline-menu.phuix-dropdown-open {
   background: {$hovergrey};
+}
+
+.phui-timeline-view + .phui-object-box {
+  margin-top: 0;
 }

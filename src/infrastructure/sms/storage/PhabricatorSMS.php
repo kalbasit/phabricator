@@ -38,9 +38,28 @@ final class PhabricatorSMS
     // and ProviderSMSID are totally garbage data before a send it attempted.
     return id(new PhabricatorSMS())
       ->setBody($body)
-      ->setSendStatus(PhabricatorSMS::STATUS_UNSENT)
-      ->setProviderShortName(PhabricatorSMS::SHORTNAME_PLACEHOLDER)
+      ->setSendStatus(self::STATUS_UNSENT)
+      ->setProviderShortName(self::SHORTNAME_PLACEHOLDER)
       ->setProviderSMSID(Filesystem::readRandomCharacters(40));
+  }
+
+  protected function getConfiguration() {
+    return array(
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'providerShortName' => 'text16',
+        'providerSMSID' => 'text40',
+        'toNumber' => 'text20',
+        'fromNumber' => 'text20?',
+        'body' => 'text',
+        'sendStatus' => 'text16?',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_provider' => array(
+          'columns' => array('providerSMSID', 'providerShortName'),
+          'unique' => true,
+        ),
+      ),
+    ) + parent::getConfiguration();
   }
 
   public function getTableName() {
@@ -51,6 +70,6 @@ final class PhabricatorSMS
 
   public function hasBeenSentAtLeastOnce() {
     return ($this->getProviderShortName() !=
-      PhabricatorSMS::SHORTNAME_PLACEHOLDER);
+      self::SHORTNAME_PLACEHOLDER);
   }
 }

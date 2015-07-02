@@ -1,17 +1,13 @@
 <?php
 
-final class HeraldApplyTranscript extends HeraldDAO {
+final class HeraldApplyTranscript extends Phobject {
 
-  protected $action;
-  protected $target;
-
-  protected $ruleID;
-  protected $effector;
-
-  protected $reason;
-
-  protected $applied;
-  protected $appliedReason;
+  private $action;
+  private $target;
+  private $ruleID;
+  private $reason;
+  private $applied;
+  private $appliedReason;
 
   public function __construct(
     HeraldEffect $effect,
@@ -20,32 +16,53 @@ final class HeraldApplyTranscript extends HeraldDAO {
 
     $this->setAction($effect->getAction());
     $this->setTarget($effect->getTarget());
-    $this->setRuleID($effect->getRuleID());
-    $this->setEffector($effect->getEffector());
+    if ($effect->getRule()) {
+      $this->setRuleID($effect->getRule()->getID());
+    }
     $this->setReason($effect->getReason());
     $this->setApplied($applied);
     $this->setAppliedReason($reason);
+  }
 
+  public function setAction($action) {
+    $this->action = $action;
+    return $this;
   }
 
   public function getAction() {
     return $this->action;
   }
 
+  public function setTarget($target) {
+    $this->target = $target;
+    return $this;
+  }
+
   public function getTarget() {
     return $this->target;
+  }
+
+  public function setRuleID($rule_id) {
+    $this->ruleID = $rule_id;
+    return $this;
   }
 
   public function getRuleID() {
     return $this->ruleID;
   }
 
-  public function getEffector() {
-    return $this->effector;
+  public function setReason($reason) {
+    $this->reason = $reason;
+    return $this;
   }
 
   public function getReason() {
     return $this->reason;
+  }
+
+  public function setApplied($applied) {
+    $this->applied = $applied;
+    return $this;
   }
 
   public function getApplied() {

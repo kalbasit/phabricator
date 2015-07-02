@@ -7,32 +7,31 @@ final class AuditQueryConduitAPIMethod extends AuditConduitAPIMethod {
   }
 
   public function getMethodDescription() {
-    return 'Query audit requests.';
+    return pht('Query audit requests.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     $statuses = array(
-      'status-any',
-      'status-open',
+      DiffusionCommitQuery::AUDIT_STATUS_ANY,
+      DiffusionCommitQuery::AUDIT_STATUS_OPEN,
+      DiffusionCommitQuery::AUDIT_STATUS_CONCERN,
+      DiffusionCommitQuery::AUDIT_STATUS_ACCEPTED,
+      DiffusionCommitQuery::AUDIT_STATUS_PARTIAL,
     );
     $status_const = $this->formatStringConstants($statuses);
 
     return array(
       'auditorPHIDs'  => 'optional list<phid>',
       'commitPHIDs'   => 'optional list<phid>',
-      'status'        => 'optional '.$status_const.' (default = "status-any")',
+      'status'        => ('optional '.$status_const.
+                          ' (default = "audit-status-any")'),
       'offset'        => 'optional int',
       'limit'         => 'optional int (default = 100)',
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'list<dict>';
-  }
-
-  public function defineErrorTypes() {
-    return array(
-    );
   }
 
   protected function execute(ConduitAPIRequest $request) {

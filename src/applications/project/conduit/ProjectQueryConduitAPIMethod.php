@@ -7,10 +7,10 @@ final class ProjectQueryConduitAPIMethod extends ProjectConduitAPIMethod {
   }
 
   public function getMethodDescription() {
-    return 'Execute searches for Projects.';
+    return pht('Execute searches for Projects.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
 
     $statuses = array(
       PhabricatorProjectQuery::STATUS_ANY,
@@ -24,9 +24,11 @@ final class ProjectQueryConduitAPIMethod extends ProjectConduitAPIMethod {
 
     return array(
       'ids'               => 'optional list<int>',
-      'names'              => 'optional list<string>',
+      'names'             => 'optional list<string>',
       'phids'             => 'optional list<phid>',
       'slugs'             => 'optional list<string>',
+      'icons'             => 'optional list<string>',
+      'colors'            => 'optional list<string>',
       'status'            => 'optional '.$status_const,
 
       'members'           => 'optional list<phid>',
@@ -36,12 +38,8 @@ final class ProjectQueryConduitAPIMethod extends ProjectConduitAPIMethod {
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'list';
-  }
-
-  public function defineErrorTypes() {
-    return array();
   }
 
   protected function execute(ConduitAPIRequest $request) {
@@ -75,6 +73,22 @@ final class ProjectQueryConduitAPIMethod extends ProjectConduitAPIMethod {
       $query->withSlugs($slugs);
     }
 
+    $request->getValue('icons');
+    if ($request->getValue('icons')) {
+      $icons = array();
+      // the internal 'fa-' prefix is a detail hidden from api clients
+      // but needs to pre prepended to the values in the icons array:
+      foreach ($request->getValue('icons') as $value) {
+        $icons[] = 'fa-'.$value;
+      }
+      $query->withIcons($icons);
+    }
+
+    $colors = $request->getValue('colors');
+    if ($colors) {
+      $query->withColors($colors);
+    }
+
     $members = $request->getValue('members');
     if ($members) {
       $query->withMemberPHIDs($members);
@@ -96,10 +110,13 @@ final class ProjectQueryConduitAPIMethod extends ProjectConduitAPIMethod {
 
     // TODO: This is pretty hideous.
     $slug_map = array();
-    foreach ($slugs as $slug) {
-      foreach ($projects as $project) {
-        if (in_array($slug, $project['slugs'])) {
-          $slug_map[$slug] = $project['phid'];
+    if ($slugs) {
+      foreach ($slugs as $slug) {
+        $normal = rtrim(PhabricatorSlug::normalize($slug), '/');
+        foreach ($projects as $project) {
+          if (in_array($normal, $project['slugs'])) {
+            $slug_map[$slug] = $project['phid'];
+          }
         }
       }
     }

@@ -1,7 +1,7 @@
 <?php
 
 final class PhabricatorCountdownRemarkupRule
-  extends PhabricatorRemarkupRuleObject {
+  extends PhabricatorObjectRemarkupRule {
 
   protected function getObjectNamePrefix() {
     return 'C';
@@ -15,7 +15,11 @@ final class PhabricatorCountdownRemarkupRule
       ->execute();
   }
 
-  protected function renderObjectEmbed($object, $handle, $options) {
+  protected function renderObjectEmbed(
+    $object,
+    PhabricatorObjectHandle $handle,
+    $options) {
+
     $viewer = $this->getEngine()->getConfig('viewer');
 
     return id(new PhabricatorCountdownView())

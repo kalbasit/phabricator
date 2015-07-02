@@ -49,7 +49,7 @@ final class PhabricatorMailImplementationTestAdapter
     $this->guts['attachments'][] = array(
       'data' => $data,
       'filename' => $filename,
-      'mimetype' => $mimetype
+      'mimetype' => $mimetype,
     );
     return $this;
   }
@@ -64,29 +64,29 @@ final class PhabricatorMailImplementationTestAdapter
     return $this;
   }
 
+  public function setHTMLBody($html_body) {
+    $this->guts['html-body'] = $html_body;
+    return $this;
+  }
+
   public function setSubject($subject) {
     $this->guts['subject'] = $subject;
     return $this;
   }
 
-  public function setIsHTML($is_html) {
-    $this->guts['is-html'] = $is_html;
-    return $this;
-  }
-
   public function supportsMessageIDHeader() {
-    return $this->config['supportsMessageIDHeader'];
+    return idx($this->config, 'supportsMessageIDHeader', true);
   }
 
   public function send() {
     if (!empty($this->guts['fail-permanently'])) {
       throw new PhabricatorMetaMTAPermanentFailureException(
-        'Unit Test (Permanent)');
+        pht('Unit Test (Permanent)'));
     }
 
     if (!empty($this->guts['fail-temporarily'])) {
       throw new Exception(
-        'Unit Test (Temporary)');
+        pht('Unit Test (Temporary)'));
     }
 
     $this->guts['did-send'] = true;

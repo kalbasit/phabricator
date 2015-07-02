@@ -44,7 +44,8 @@ final class ReleephRequestActionController
       case 'pass':
         static $action_map = array(
           'want' => ReleephRequest::INTENT_WANT,
-          'pass' => ReleephRequest::INTENT_PASS);
+          'pass' => ReleephRequest::INTENT_PASS,
+        );
         $intent = $action_map[$action];
         $xactions[] = id(new ReleephRequestTransaction())
           ->setTransactionType(ReleephRequestTransaction::TYPE_USER_INTENT)
@@ -63,8 +64,9 @@ final class ReleephRequestActionController
           // We're all good!
         } else {
           throw new Exception(
-            "Bug!  Only pushers or the requestor can manually change a ".
-            "request's in-branch status!");
+            pht(
+              "Bug! Only pushers or the requestor can manually change a ".
+              "request's in-branch status!"));
         }
 
         if ($action === 'mark-manually-picked') {
@@ -88,7 +90,8 @@ final class ReleephRequestActionController
         break;
 
       default:
-        throw new Exception("unknown or unimplemented action {$action}");
+        throw new Exception(
+          pht('Unknown or unimplemented action %s.', $action));
     }
 
     $editor->applyTransactions($pull, $xactions);

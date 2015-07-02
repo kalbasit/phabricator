@@ -12,12 +12,33 @@ final class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
   protected $message;
   protected $messageIDHash = '';
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_SERIALIZATION => array(
         'headers'     => self::SERIALIZATION_JSON,
         'bodies'      => self::SERIALIZATION_JSON,
         'attachments' => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'relatedPHID' => 'phid?',
+        'authorPHID' => 'phid?',
+        'message' => 'text?',
+        'messageIDHash' => 'bytes12',
+        'status' => 'text32',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'relatedPHID' => array(
+          'columns' => array('relatedPHID'),
+        ),
+        'authorPHID' => array(
+          'columns' => array('authorPHID'),
+        ),
+        'key_messageIDHash' => array(
+          'columns' => array('messageIDHash'),
+        ),
+        'key_created' => array(
+          'columns' => array('dateCreated'),
+        ),
       ),
     ) + parent::getConfiguration();
   }
@@ -69,7 +90,7 @@ final class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
     return $this->loadPHIDsFromAddresses($addresses);
   }
 
-  final public function loadCCPHIDs() {
+  public function loadCCPHIDs() {
     return $this->loadPHIDsFromAddresses($this->getCCAddresses());
   }
 
@@ -79,13 +100,7 @@ final class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
     }
     $users = id(new PhabricatorUserEmail())
       ->loadAllWhere('address IN (%Ls)', $addresses);
-    $user_phids = mpull($users, 'getUserPHID');
-
-    $mailing_lists = id(new PhabricatorMetaMTAMailingList())
-      ->loadAllWhere('email in (%Ls)', $addresses);
-    $mailing_list_phids = mpull($mailing_lists, 'getPHID');
-
-    return array_merge($user_phids,  $mailing_list_phids);
+    return mpull($users, 'getUserPHID');
   }
 
   public function processReceivedMail() {
@@ -99,6 +114,19 @@ final class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
       $receiver->validateSender($this, $sender);
 
       $this->setAuthorPHID($sender->getPHID());
+
+      // Now that we've identified the sender, mark them as the author of
+      // any attached files.
+      $attachments = $this->getAttachments();
+      if ($attachments) {
+        $files = id(new PhabricatorFileQuery())
+          ->setViewer(PhabricatorUser::getOmnipotentUser())
+          ->withPHIDs($attachments)
+          ->execute();
+        foreach ($files as $file) {
+          $file->setAuthorPHID($sender->getPHID())->save();
+        }
+      }
 
       $receiver->receiveMail($this, $sender);
     } catch (PhabricatorMetaMTAReceivedMailProcessingException $ex) {
@@ -186,8 +214,8 @@ final class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
     throw new PhabricatorMetaMTAReceivedMailProcessingException(
       MetaMTAReceivedMailStatus::STATUS_FROM_PHABRICATOR,
       pht(
-        "Ignoring email with 'X-Phabricator-Sent-This-Message' header to ".
-        "avoid loops."));
+        "Ignoring email with '%s' header to avoid loops.",
+        'X-Phabricator-Sent-This-Message'));
   }
 
   /**
@@ -329,6 +357,7 @@ EOBODY
 
     $mail = id(new PhabricatorMetaMTAMail())
       ->setIsErrorEmail(true)
+      ->setForceDelivery(true)
       ->setSubject($title)
       ->addRawTos(array($from))
       ->setBody($body)

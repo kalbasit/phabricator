@@ -1,7 +1,10 @@
 <?php
 
 final class DrydockBlueprint extends DrydockDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface,
+    PhabricatorCustomFieldInterface {
 
   protected $className;
   protected $blueprintName;
@@ -10,6 +13,7 @@ final class DrydockBlueprint extends DrydockDAO
   protected $details = array();
 
   private $implementation = self::ATTACHABLE;
+  private $customFields = self::ATTACHABLE;
 
   public static function initializeNewBlueprint(PhabricatorUser $actor) {
     $app = id(new PhabricatorApplicationQuery())
@@ -28,12 +32,16 @@ final class DrydockBlueprint extends DrydockDAO
       ->setBlueprintName('');
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'details' => self::SERIALIZATION_JSON,
-      )
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'className' => 'text255',
+        'blueprintName' => 'text255',
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -48,7 +56,9 @@ final class DrydockBlueprint extends DrydockDAO
       DrydockBlueprintImplementation::getAllBlueprintImplementations();
     if (!isset($implementations[$class])) {
       throw new Exception(
-        "Invalid class name for blueprint (got '".$class."')");
+        pht(
+          "Invalid class name for blueprint (got '%s')",
+          $class));
     }
     return id(new $class())->attachInstance($this);
   }
@@ -56,6 +66,38 @@ final class DrydockBlueprint extends DrydockDAO
   public function attachImplementation(DrydockBlueprintImplementation $impl) {
     $this->implementation = $impl;
     return $this;
+  }
+
+  public function getDetail($key, $default = null) {
+    return idx($this->details, $key, $default);
+  }
+
+  public function setDetail($key, $value) {
+    $this->details[$key] = $value;
+    return $this;
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new DrydockBlueprintEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new DrydockBlueprintTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 
@@ -85,5 +127,27 @@ final class DrydockBlueprint extends DrydockDAO
   public function describeAutomaticCapability($capability) {
     return null;
   }
+
+
+/* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
+
+
+  public function getCustomFieldSpecificationForRole($role) {
+    return array();
+  }
+
+  public function getCustomFieldBaseClass() {
+    return 'DrydockBlueprintCustomField';
+  }
+
+  public function getCustomFields() {
+    return $this->assertAttached($this->customFields);
+  }
+
+  public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
+    $this->customFields = $fields;
+    return $this;
+  }
+
 
 }

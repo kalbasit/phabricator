@@ -162,13 +162,17 @@
  * @task   xaction Managing Transactions
  * @task   isolate Isolation for Unit Testing
  */
-abstract class LiskDAO {
+abstract class LiskDAO extends Phobject {
 
   const CONFIG_IDS                  = 'id-mechanism';
   const CONFIG_TIMESTAMPS           = 'timestamps';
   const CONFIG_AUX_PHID             = 'auxiliary-phid';
   const CONFIG_SERIALIZATION        = 'col-serialization';
   const CONFIG_BINARY               = 'binary';
+  const CONFIG_COLUMN_SCHEMA        = 'col-schema';
+  const CONFIG_KEY_SCHEMA           = 'key-schema';
+  const CONFIG_NO_TABLE             = 'no-table';
+  const CONFIG_NO_MUTATE            = 'no-mutate';
 
   const SERIALIZATION_NONE          = 'id';
   const SERIALIZATION_JSON          = 'json';
@@ -184,6 +188,7 @@ abstract class LiskDAO {
   private static $transactionIsolationLevel = 0;
 
   private $ephemeral = false;
+  private $forcedConnection;
 
   private static $connections       = array();
 
@@ -276,6 +281,21 @@ abstract class LiskDAO {
   }
 
 
+  /**
+   * Force an object to use a specific connection.
+   *
+   * This overrides all connection management and forces the object to use
+   * a specific connection when interacting with the database.
+   *
+   * @param AphrontDatabaseConnection Connection to force this object to use.
+   * @task conn
+   */
+  public function setForcedConnection(AphrontDatabaseConnection $connection) {
+    $this->forcedConnection = $connection;
+    return $this;
+  }
+
+
 /* -(  Configuring Lisk  )--------------------------------------------------- */
 
 
@@ -284,7 +304,7 @@ abstract class LiskDAO {
    * to change these behaviors, you should override this method in your child
    * class and change the options you're interested in. For example:
    *
-   *   public function getConfiguration() {
+   *   protected function getConfiguration() {
    *     return array(
    *       Lisk_DataAccessObject::CONFIG_EXAMPLE => true,
    *     ) + parent::getConfiguration();
@@ -342,6 +362,23 @@ abstract class LiskDAO {
    * You can optionally provide a map of columns to a flag indicating that
    * they store binary data. These columns will not raise an error when
    * handling binary writes.
+   *
+   * CONFIG_COLUMN_SCHEMA
+   * Provide a map of columns to schema column types.
+   *
+   * CONFIG_KEY_SCHEMA
+   * Provide a map of key names to key specifications.
+   *
+   * CONFIG_NO_TABLE
+   * Allows you to specify that this object does not actually have a table in
+   * the database.
+   *
+   * CONFIG_NO_MUTATE
+   * Provide a map of columns which should not be included in UPDATE statements.
+   * If you have some columns which are always written to explicitly and should
+   * never be overwritten by a save(), you can specify them here. This is an
+   * advanced, specialized feature and there are usually better approaches for
+   * most locking/contention problems.
    *
    * @return dictionary  Map of configuration options to values.
    *
@@ -460,8 +497,10 @@ abstract class LiskDAO {
       $args);
 
     if (count($data) > 1) {
-      throw new AphrontQueryCountException(
-        'More than 1 result from loadOneWhere()!');
+      throw new AphrontCountQueryException(
+        pht(
+          'More than one result from %s!',
+          __FUNCTION__.'()'));
     }
 
     $data = reset($data);
@@ -508,7 +547,8 @@ abstract class LiskDAO {
    */
   public function reload() {
     if (!$this->getID()) {
-      throw new Exception("Unable to reload object that hasn't been loaded!");
+      throw new Exception(
+        pht("Unable to reload object that hasn't been loaded!"));
     }
 
     $result = $this->loadOneWhere(
@@ -517,7 +557,7 @@ abstract class LiskDAO {
       $this->getID());
 
     if (!$result) {
-      throw new AphrontQueryObjectMissingException();
+      throw new AphrontObjectMissingQueryException();
     }
 
     return $this;
@@ -771,8 +811,10 @@ abstract class LiskDAO {
     }
 
     if (count($relatives) > 1) {
-      throw new AphrontQueryCountException(
-        'More than 1 result from loadOneRelative()!');
+      throw new AphrontCountQueryException(
+        pht(
+          'More than one result from %s!',
+          __FUNCTION__.'()'));
     }
 
     return reset($relatives);
@@ -855,7 +897,7 @@ abstract class LiskDAO {
    *
    * @task   info
    */
-  protected function getProperties() {
+  protected function getAllLiskProperties() {
     static $properties = null;
     if (!isset($properties)) {
       $class = new ReflectionClass(get_class($this));
@@ -893,7 +935,7 @@ abstract class LiskDAO {
   protected function checkProperty($property) {
     static $properties = null;
     if ($properties === null) {
-      $properties = $this->getProperties();
+      $properties = $this->getAllLiskProperties();
     }
 
     $property = strtolower($property);
@@ -917,7 +959,14 @@ abstract class LiskDAO {
    */
   public function establishConnection($mode, $force_new = false) {
     if ($mode != 'r' && $mode != 'w') {
-      throw new Exception("Unknown mode '{$mode}', should be 'r' or 'w'.");
+      throw new Exception(
+        pht(
+          "Unknown mode '%s', should be 'r' or 'w'.",
+          $mode));
+    }
+
+    if ($this->forcedConnection) {
+      return $this->forcedConnection;
     }
 
     if (self::shouldIsolateAllLiskEffectsToCurrentProcess()) {
@@ -980,9 +1029,9 @@ abstract class LiskDAO {
    *
    * @task   info
    */
-  protected function getPropertyValues() {
+  protected function getAllLiskPropertyValues() {
     $map = array();
-    foreach ($this->getProperties() as $p) {
+    foreach ($this->getAllLiskProperties() as $p) {
       // We may receive a warning here for properties we've implicitly added
       // through configuration; squelch it.
       $map[$p] = @$this->$p;
@@ -1070,7 +1119,16 @@ abstract class LiskDAO {
     $this->isEphemeralCheck();
 
     $this->willSaveObject();
-    $data = $this->getPropertyValues();
+    $data = $this->getAllLiskPropertyValues();
+
+    // Remove colums flagged as nonmutable from the update statement.
+    $no_mutate = $this->getConfigOption(self::CONFIG_NO_MUTATE);
+    if ($no_mutate) {
+      foreach ($no_mutate as $column) {
+        unset($data[$column]);
+      }
+    }
+
     $this->willWriteData($data);
 
     $map = array();
@@ -1139,7 +1197,7 @@ abstract class LiskDAO {
    */
   protected function insertRecordIntoDatabase($mode) {
     $this->willSaveObject();
-    $data = $this->getPropertyValues();
+    $data = $this->getAllLiskPropertyValues();
 
     $conn = $this->establishConnection('w');
 
@@ -1160,7 +1218,7 @@ abstract class LiskDAO {
         $id_key = $this->getIDKeyForUse();
         if (empty($data[$id_key])) {
           $counter_name = $this->getTableName();
-          $id = self::loadNextCounterID($conn, $counter_name);
+          $id = self::loadNextCounterValue($conn, $counter_name);
           $this->setID($id);
           $data[$id_key] = $id;
         }
@@ -1168,7 +1226,7 @@ abstract class LiskDAO {
       case self::IDS_MANUAL:
         break;
       default:
-        throw new Exception('Unknown CONFIG_IDs mechanism!');
+        throw new Exception(pht('Unknown %s mechanism!', 'CONFIG_IDs'));
     }
 
     $this->willWriteData($data);
@@ -1183,11 +1241,11 @@ abstract class LiskDAO {
         } else {
           $data[$key] = qsprintf($conn, '%ns', $value);
         }
-      } catch (AphrontQueryParameterException $parameter_exception) {
+      } catch (AphrontParameterQueryException $parameter_exception) {
         throw new PhutilProxyException(
           pht(
             "Unable to insert or update object of class %s, field '%s' ".
-            "has a nonscalar value.",
+            "has a non-scalar value.",
             get_class($this),
             $key),
           $parameter_exception);
@@ -1223,9 +1281,10 @@ abstract class LiskDAO {
 
     if ($key_type == self::IDS_MANUAL) {
       throw new Exception(
-        'You are using manual IDs. You must override the '.
-        'shouldInsertWhenSaved() method to properly detect '.
-        'when to insert a new record.');
+        pht(
+          'You are using manual IDs. You must override the %s method '.
+          'to properly detect when to insert a new record.',
+          __FUNCTION__.'()'));
     } else {
       return !$this->getID();
     }
@@ -1264,8 +1323,9 @@ abstract class LiskDAO {
     $id_key = $this->getIDKey();
     if (!$id_key) {
       throw new Exception(
-        'This DAO does not have a single-part primary key. The method you '.
-        'called requires a single-part primary key.');
+        pht(
+          'This DAO does not have a single-part primary key. The method you '.
+          'called requires a single-part primary key.'));
     }
     return $id_key;
   }
@@ -1278,10 +1338,12 @@ abstract class LiskDAO {
    *
    * @task   hook
    */
-  protected function generatePHID() {
+  public function generatePHID() {
     throw new Exception(
-      'To use CONFIG_AUX_PHID, you need to overload '.
-      'generatePHID() to perform PHID generation.');
+      pht(
+        'To use %s, you need to overload %s to perform PHID generation.',
+        'CONFIG_AUX_PHID',
+        'generatePHID()'));
   }
 
 
@@ -1505,7 +1567,7 @@ abstract class LiskDAO {
     self::$processIsolationLevel--;
     if (self::$processIsolationLevel < 0) {
       throw new Exception(
-        'Lisk process isolation level was reduced below 0.');
+        pht('Lisk process isolation level was reduced below 0.'));
     }
   }
 
@@ -1541,7 +1603,7 @@ abstract class LiskDAO {
     self::$transactionIsolationLevel--;
     if (self::$transactionIsolationLevel < 0) {
       throw new Exception(
-        'Lisk transaction isolation level was reduced below 0.');
+        pht('Lisk transaction isolation level was reduced below 0.'));
     } else if (self::$transactionIsolationLevel == 0) {
       foreach (self::$connections as $key => $conn) {
         if ($conn) {
@@ -1593,7 +1655,8 @@ abstract class LiskDAO {
             }
             break;
           default:
-            throw new Exception("Unknown serialization format '{$format}'.");
+            throw new Exception(
+              pht("Unknown serialization format '%s'.", $format));
         }
       }
     }
@@ -1630,11 +1693,11 @@ abstract class LiskDAO {
         $property = $dispatch_map[$method];
       } else {
         if (substr($method, 0, 3) !== 'get') {
-          throw new Exception("Unable to resolve method '{$method}'!");
+          throw new Exception(pht("Unable to resolve method '%s'!", $method));
         }
         $property = substr($method, 3);
         if (!($property = $this->checkProperty($property))) {
-          throw new Exception("Bad getter call: {$method}");
+          throw new Exception(pht('Bad getter call: %s', $method));
         }
         $dispatch_map[$method] = $property;
       }
@@ -1647,12 +1710,12 @@ abstract class LiskDAO {
         $property = $dispatch_map[$method];
       } else {
         if (substr($method, 0, 3) !== 'set') {
-          throw new Exception("Unable to resolve method '{$method}'!");
+          throw new Exception(pht("Unable to resolve method '%s'!", $method));
         }
         $property = substr($method, 3);
         $property = $this->checkProperty($property);
         if (!$property) {
-          throw new Exception("Bad setter call: {$method}");
+          throw new Exception(pht('Bad setter call: %s', $method));
         }
         $dispatch_map[$method] = $property;
       }
@@ -1662,7 +1725,7 @@ abstract class LiskDAO {
       return $this;
     }
 
-    throw new Exception("Unable to resolve method '{$method}'.");
+    throw new Exception(pht("Unable to resolve method '%s'.", $method));
   }
 
   /**
@@ -1671,9 +1734,13 @@ abstract class LiskDAO {
    * @task   util
    */
   public function __set($name, $value) {
-    phlog('Wrote to undeclared property '.get_class($this).'::$'.$name.'.');
+    phlog(
+      pht(
+        'Wrote to undeclared property %s.',
+        get_class($this).'::$'.$name));
     $this->$name = $value;
   }
+
 
   /**
    * Increments a named counter and returns the next value.
@@ -1684,7 +1751,7 @@ abstract class LiskDAO {
    *
    * @task util
    */
-  public static function loadNextCounterID(
+  public static function loadNextCounterValue(
     AphrontDatabaseConnection $conn_w,
     $counter_name) {
 
@@ -1708,8 +1775,182 @@ abstract class LiskDAO {
     return $conn_w->getInsertID();
   }
 
+
+  /**
+   * Returns the current value of a named counter.
+   *
+   * @param AphrontDatabaseConnection Database where the counter resides.
+   * @param string Counter name to read.
+   * @return int|null Current value, or `null` if the counter does not exist.
+   *
+   * @task util
+   */
+  public static function loadCurrentCounterValue(
+    AphrontDatabaseConnection $conn_r,
+    $counter_name) {
+
+    $row = queryfx_one(
+      $conn_r,
+      'SELECT counterValue FROM %T WHERE counterName = %s',
+      self::COUNTER_TABLE_NAME,
+      $counter_name);
+    if (!$row) {
+      return null;
+    }
+
+    return (int)$row['counterValue'];
+  }
+
+
+  /**
+   * Overwrite a named counter, forcing it to a specific value.
+   *
+   * If the counter does not exist, it is created.
+   *
+   * @param AphrontDatabaseConnection Database where the counter resides.
+   * @param string Counter name to create or overwrite.
+   * @return void
+   *
+   * @task util
+   */
+  public static function overwriteCounterValue(
+    AphrontDatabaseConnection $conn_w,
+    $counter_name,
+    $counter_value) {
+
+    queryfx(
+      $conn_w,
+      'INSERT INTO %T (counterName, counterValue) VALUES (%s, %d)
+        ON DUPLICATE KEY UPDATE counterValue = VALUES(counterValue)',
+      self::COUNTER_TABLE_NAME,
+      $counter_name,
+      $counter_value);
+  }
+
   private function getBinaryColumns() {
     return $this->getConfigOption(self::CONFIG_BINARY);
+  }
+
+
+  public function getSchemaColumns() {
+    $custom_map = $this->getConfigOption(self::CONFIG_COLUMN_SCHEMA);
+    if (!$custom_map) {
+      $custom_map = array();
+    }
+
+    $serialization = $this->getConfigOption(self::CONFIG_SERIALIZATION);
+    if (!$serialization) {
+      $serialization = array();
+    }
+
+    $serialization_map = array(
+      self::SERIALIZATION_JSON => 'text',
+      self::SERIALIZATION_PHP => 'bytes',
+    );
+
+    $binary_map = $this->getBinaryColumns();
+
+    $id_mechanism = $this->getConfigOption(self::CONFIG_IDS);
+    if ($id_mechanism == self::IDS_AUTOINCREMENT) {
+      $id_type = 'auto';
+    } else {
+      $id_type = 'id';
+    }
+
+    $builtin = array(
+      'id' => $id_type,
+      'phid' => 'phid',
+      'viewPolicy' => 'policy',
+      'editPolicy' => 'policy',
+      'epoch' => 'epoch',
+      'dateCreated' => 'epoch',
+      'dateModified' => 'epoch',
+    );
+
+    $map = array();
+    foreach ($this->getAllLiskProperties() as $property) {
+      // First, use types specified explicitly in the table configuration.
+      if (array_key_exists($property, $custom_map)) {
+        $map[$property] = $custom_map[$property];
+        continue;
+      }
+
+      // If we don't have an explicit type, try a builtin type for the
+      // column.
+      $type = idx($builtin, $property);
+      if ($type) {
+        $map[$property] = $type;
+        continue;
+      }
+
+      // If the column has serialization, we can infer the column type.
+      if (isset($serialization[$property])) {
+        $type = idx($serialization_map, $serialization[$property]);
+        if ($type) {
+          $map[$property] = $type;
+          continue;
+        }
+      }
+
+      if (isset($binary_map[$property])) {
+        $map[$property] = 'bytes';
+        continue;
+      }
+
+      if ($property === 'spacePHID') {
+        $map[$property] = 'phid?';
+        continue;
+      }
+
+      // If the column is named `somethingPHID`, infer it is a PHID.
+      if (preg_match('/[a-z]PHID$/', $property)) {
+        $map[$property] = 'phid';
+        continue;
+      }
+
+      // If the column is named `somethingID`, infer it is an ID.
+      if (preg_match('/[a-z]ID$/', $property)) {
+        $map[$property] = 'id';
+        continue;
+      }
+
+      // We don't know the type of this column.
+      $map[$property] = PhabricatorConfigSchemaSpec::DATATYPE_UNKNOWN;
+    }
+
+    return $map;
+  }
+
+  public function getSchemaKeys() {
+    $custom_map = $this->getConfigOption(self::CONFIG_KEY_SCHEMA);
+    if (!$custom_map) {
+      $custom_map = array();
+    }
+
+    $default_map = array();
+    foreach ($this->getAllLiskProperties() as $property) {
+      switch ($property) {
+        case 'id':
+          $default_map['PRIMARY'] = array(
+            'columns' => array('id'),
+            'unique' => true,
+          );
+          break;
+        case 'phid':
+          $default_map['key_phid'] = array(
+            'columns' => array('phid'),
+            'unique' => true,
+          );
+          break;
+        case 'spacePHID':
+          $default_map['key_space'] = array(
+            'columns' => array('spacePHID'),
+          );
+          break;
+      }
+    }
+
+    return $custom_map + $default_map;
   }
 
 }

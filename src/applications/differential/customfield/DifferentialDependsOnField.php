@@ -34,7 +34,7 @@ final class DifferentialDependsOnField
   public function getRequiredHandlePHIDsForPropertyView() {
     return PhabricatorEdgeQuery::loadDestinationPHIDs(
       $this->getObject()->getPHID(),
-      PhabricatorEdgeConfig::TYPE_DREV_DEPENDS_ON_DREV);
+      DifferentialRevisionDependsOnRevisionEdgeType::EDGECONST);
   }
 
   public function renderPropertyViewValue(array $handles) {
@@ -44,8 +44,9 @@ final class DifferentialDependsOnField
   public function getProTips() {
     return array(
       pht(
-        'Create a dependendency between revisions by writing '.
-        '"Depends on D123" in your summary.'),
+        'Create a dependency between revisions by writing '.
+        '"%s" in your summary.',
+        'Depends on D123'),
     );
   }
 
@@ -56,7 +57,7 @@ final class DifferentialDependsOnField
   public function getConduitDictionaryValue() {
     return PhabricatorEdgeQuery::loadDestinationPHIDs(
       $this->getObject()->getPHID(),
-      PhabricatorEdgeConfig::TYPE_DREV_DEPENDS_ON_DREV);
+      DifferentialRevisionDependsOnRevisionEdgeType::EDGECONST);
   }
 
 }

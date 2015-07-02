@@ -82,8 +82,9 @@ abstract class PhabricatorOAuthAuthProvider extends PhabricatorAuthProvider {
     $help = $this->getProviderConfigurationHelp();
 
     return $help."\n\n".
-      pht('Use the **OAuth App Notes** field to record details about which '.
-          'account the external application is registered under.');
+      pht(
+        'Use the **OAuth App Notes** field to record details about which '.
+        'account the external application is registered under.');
   }
 
   abstract protected function getProviderConfigurationHelp();
@@ -113,13 +114,14 @@ abstract class PhabricatorOAuthAuthProvider extends PhabricatorAuthProvider {
     $form
       ->appendChild(
         id(new AphrontFormTextControl())
-        ->setLabel($id_label)
+          ->setLabel($id_label)
           ->setName($key_id)
           ->setValue($v_id)
           ->setError($e_id))
       ->appendChild(
         id(new AphrontFormPasswordControl())
-        ->setLabel($secret_label)
+          ->setLabel($secret_label)
+          ->setDisableAutocomplete(true)
           ->setName($key_secret)
           ->setValue($v_secret)
           ->setError($e_secret))

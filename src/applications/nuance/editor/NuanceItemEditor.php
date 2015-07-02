@@ -3,12 +3,21 @@
 final class NuanceItemEditor
   extends PhabricatorApplicationTransactionEditor {
 
+  public function getEditorApplicationClass() {
+    return 'PhabricatorNuanceApplication';
+  }
+
+  public function getEditorObjectsDescription() {
+    return pht('Nuance Items');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
     $types[] = NuanceItemTransaction::TYPE_OWNER;
     $types[] = NuanceItemTransaction::TYPE_SOURCE;
     $types[] = NuanceItemTransaction::TYPE_REQUESTOR;
+    $types[] = NuanceItemTransaction::TYPE_PROPERTY;
 
     $types[] = PhabricatorTransactions::TYPE_EDGE;
     $types[] = PhabricatorTransactions::TYPE_COMMENT;
@@ -29,6 +38,10 @@ final class NuanceItemEditor
         return $object->getSourcePHID();
       case NuanceItemTransaction::TYPE_OWNER:
         return $object->getOwnerPHID();
+      case NuanceItemTransaction::TYPE_PROPERTY:
+        $key = $xaction->getMetadataValue(
+          NuanceItemTransaction::PROPERTY_KEY);
+        return $object->getNuanceProperty($key);
     }
 
     return parent::getCustomTransactionOldValue($object, $xaction);
@@ -42,6 +55,7 @@ final class NuanceItemEditor
       case NuanceItemTransaction::TYPE_REQUESTOR:
       case NuanceItemTransaction::TYPE_SOURCE:
       case NuanceItemTransaction::TYPE_OWNER:
+      case NuanceItemTransaction::TYPE_PROPERTY:
         return $xaction->getNewValue();
     }
 
@@ -62,6 +76,11 @@ final class NuanceItemEditor
       case NuanceItemTransaction::TYPE_OWNER:
         $object->setOwnerPHID($xaction->getNewValue());
         break;
+      case NuanceItemTransaction::TYPE_PROPERTY:
+        $key = $xaction->getMetadataValue(
+          NuanceItemTransaction::PROPERTY_KEY);
+        $object->setNuanceProperty($key, $xaction->getNewValue());
+        break;
     }
   }
 
@@ -73,6 +92,7 @@ final class NuanceItemEditor
       case NuanceItemTransaction::TYPE_REQUESTOR:
       case NuanceItemTransaction::TYPE_SOURCE:
       case NuanceItemTransaction::TYPE_OWNER:
+      case NuanceItemTransaction::TYPE_PROPERTY:
         return;
     }
 

@@ -5,12 +5,15 @@ final class PhabricatorMacroQuery
 
   private $ids;
   private $phids;
-  private $authors;
+  private $authorPHIDs;
   private $names;
   private $nameLike;
+  private $namePrefix;
   private $dateCreatedAfter;
   private $dateCreatedBefore;
   private $flagColor;
+
+  private $needFiles;
 
   private $status = 'status-any';
   const STATUS_ANY = 'status-any';
@@ -48,8 +51,8 @@ final class PhabricatorMacroQuery
     return $this;
   }
 
-  public function withAuthorPHIDs(array $authors) {
-    $this->authors = $authors;
+  public function withAuthorPHIDs(array $author_phids) {
+    $this->authorPHIDs = $author_phids;
     return $this;
   }
 
@@ -60,6 +63,11 @@ final class PhabricatorMacroQuery
 
   public function withNames(array $names) {
     $this->names = $names;
+    return $this;
+  }
+
+  public function withNamePrefix($prefix) {
+    $this->namePrefix = $prefix;
     return $this;
   }
 
@@ -83,57 +91,62 @@ final class PhabricatorMacroQuery
     return $this;
   }
 
-  protected function loadPage() {
-    $macro_table = new PhabricatorFileImageMacro();
-    $conn = $macro_table->establishConnection('r');
-
-    $rows = queryfx_all(
-      $conn,
-      'SELECT m.* FROM %T m %Q %Q %Q',
-      $macro_table->getTableName(),
-      $this->buildWhereClause($conn),
-      $this->buildOrderClause($conn),
-      $this->buildLimitClause($conn));
-
-    return $macro_table->loadAllFromArray($rows);
+  public function needFiles($need_files) {
+    $this->needFiles = $need_files;
+    return $this;
   }
 
-  protected function buildWhereClause(AphrontDatabaseConnection $conn) {
-    $where = array();
+  public function newResultObject() {
+    return new PhabricatorFileImageMacro();
+  }
 
-    if ($this->ids) {
+  protected function loadPage() {
+    return $this->loadStandardPage(new PhabricatorFileImageMacro());
+  }
+
+  protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {
+    $where = parent::buildWhereClauseParts($conn);
+
+    if ($this->ids !== null) {
       $where[] = qsprintf(
         $conn,
         'm.id IN (%Ld)',
         $this->ids);
     }
 
-    if ($this->phids) {
+    if ($this->phids !== null) {
       $where[] = qsprintf(
         $conn,
         'm.phid IN (%Ls)',
         $this->phids);
     }
 
-    if ($this->authors) {
+    if ($this->authorPHIDs !== null) {
       $where[] = qsprintf(
         $conn,
         'm.authorPHID IN (%Ls)',
-        $this->authors);
+        $this->authorPHIDs);
     }
 
-    if ($this->nameLike) {
+    if (strlen($this->nameLike)) {
       $where[] = qsprintf(
         $conn,
         'm.name LIKE %~',
         $this->nameLike);
     }
 
-    if ($this->names) {
+    if ($this->names !== null) {
       $where[] = qsprintf(
         $conn,
         'm.name IN (%Ls)',
         $this->names);
+    }
+
+    if (strlen($this->namePrefix)) {
+      $where[] = qsprintf(
+        $conn,
+        'm.name LIKE %>',
+        $this->namePrefix);
     }
 
     switch ($this->status) {
@@ -150,7 +163,7 @@ final class PhabricatorMacroQuery
       case self::STATUS_ANY:
         break;
       default:
-        throw new Exception("Unknown status '{$this->status}'!");
+        throw new Exception(pht("Unknown status '%s'!", $this->status));
     }
 
     if ($this->dateCreatedAfter) {
@@ -181,7 +194,7 @@ final class PhabricatorMacroQuery
         ->execute();
 
       if (empty($flags)) {
-        throw new PhabricatorEmptyQueryException('No matching flags.');
+        throw new PhabricatorEmptyQueryException(pht('No matching flags.'));
       } else {
         $where[] = qsprintf(
           $conn,
@@ -190,38 +203,67 @@ final class PhabricatorMacroQuery
       }
     }
 
-    $where[] = $this->buildPagingClause($conn);
-
-    return $this->formatWhereClause($where);
+    return $where;
   }
 
   protected function didFilterPage(array $macros) {
-    $file_phids = mpull($macros, 'getFilePHID');
-    $files = id(new PhabricatorFileQuery())
-      ->setViewer($this->getViewer())
-      ->setParentQuery($this)
-      ->withPHIDs($file_phids)
-      ->execute();
-    $files = mpull($files, null, 'getPHID');
+    if ($this->needFiles) {
+      $file_phids = mpull($macros, 'getFilePHID');
+      $files = id(new PhabricatorFileQuery())
+        ->setViewer($this->getViewer())
+        ->setParentQuery($this)
+        ->withPHIDs($file_phids)
+        ->execute();
+      $files = mpull($files, null, 'getPHID');
 
-    foreach ($macros as $key => $macro) {
-      $file = idx($files, $macro->getFilePHID());
-      if (!$file) {
-        unset($macros[$key]);
-        continue;
+      foreach ($macros as $key => $macro) {
+        $file = idx($files, $macro->getFilePHID());
+        if (!$file) {
+          unset($macros[$key]);
+          continue;
+        }
+        $macro->attachFile($file);
       }
-      $macro->attachFile($file);
     }
 
     return $macros;
   }
 
-  protected function getPagingColumn() {
-    return 'm.id';
+  protected function getPrimaryTableAlias() {
+    return 'm';
   }
 
   public function getQueryApplicationClass() {
     return 'PhabricatorMacroApplication';
+  }
+
+  public function getOrderableColumns() {
+    return parent::getOrderableColumns() + array(
+      'name' => array(
+        'table' => 'm',
+        'column' => 'name',
+        'type' => 'string',
+        'reverse' => true,
+        'unique' => true,
+      ),
+    );
+  }
+
+  protected function getPagingValueMap($cursor, array $keys) {
+    $macro = $this->loadCursorObject($cursor);
+    return array(
+      'id' => $macro->getID(),
+      'name' => $macro->getName(),
+    );
+  }
+
+  public function getBuiltinOrders() {
+    return array(
+      'name' => array(
+        'vector' => array('name'),
+        'name' => pht('Name'),
+      ),
+    ) + parent::getBuiltinOrders();
   }
 
 }

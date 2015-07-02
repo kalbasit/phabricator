@@ -11,6 +11,14 @@ final class PhabricatorDeveloperConfigOptions
     return pht('Options for Phabricator developers, including debugging.');
   }
 
+  public function getFontIcon() {
+    return 'fa-bug';
+  }
+
+  public function getGroup() {
+    return 'core';
+  }
+
   public function getOptions() {
     return array(
       $this->newOption('darkconsole.enabled', 'bool', false)
@@ -44,8 +52,34 @@ final class PhabricatorDeveloperConfigOptions
             "even for logged-out users. This is only really useful if you ".
             "need to debug something on a logged-out page. You should not ".
             "enable this option in production.\n\n".
-            "You must enable DarkConsole by setting {{darkconsole.enabled}} ".
-            "before this option will have any effect.")),
+            "You must enable DarkConsole by setting '%s' ".
+            "before this option will have any effect.",
+            'darkconsole.enabled')),
+      $this->newOption('debug.time-limit', 'int', null)
+        ->setSummary(
+          pht(
+            'Limit page execution time to debug hangs.'))
+        ->setDescription(
+          pht(
+            "This option can help debug pages which are taking a very ".
+            "long time (more than 30 seconds) to render.\n\n".
+            "If a page is slow to render (but taking less than 30 seconds), ".
+            "the best tools to use to figure out why it is slow are usually ".
+            "the DarkConsole service call profiler and XHProf.\n\n".
+            "However, if a request takes a very long time to return, some ".
+            "components (like Apache, nginx, or PHP itself) may abort the ".
+            "request before it finishes. This can prevent you from using ".
+            "profiling tools to understand page performance in detail.\n\n".
+            "In these cases, you can use this option to force the page to ".
+            "abort after a smaller number of seconds (for example, 10), and ".
+            "dump a useful stack trace. This can provide useful information ".
+            "about why a page is hanging.\n\n".
+            "To use this option, set it to a small number (like 10), and ".
+            "reload a hanging page. The page should exit after 10 seconds ".
+            "and give you a stack trace.\n\n".
+            "You should turn this option off (set it to 0) when you are ".
+            "done with it. Leaving it on creates a small amount of overhead ".
+            "for all requests, even if they do not hit the time limit.")),
       $this->newOption('debug.stop-on-redirect', 'bool', false)
         ->setBoolOptions(
           array(
@@ -85,6 +119,27 @@ final class PhabricatorDeveloperConfigOptions
             "data to look at eventually). In development, it may be useful to ".
             "set it to 1 in order to debug performance problems.\n\n".
             "NOTE: You must install XHProf for profiling to work.")),
+      $this->newOption('debug.sample-rate', 'int', 1000)
+        ->setLocked(true)
+        ->addExample(0, pht('No performance sampling.'))
+        ->addExample(1, pht('Sample every request (slow).'))
+        ->addExample(1000, pht('Sample 0.1%% of requests.'))
+        ->setSummary(pht('Automatically sample some fraction of requests.'))
+        ->setDescription(
+          pht(
+            "The Multimeter application collects performance samples. You ".
+            "can use this data to help you understand what Phabricator is ".
+            "spending time and resources doing, and to identify problematic ".
+            "access patterns.".
+            "\n\n".
+            "This option controls how frequently sampling activates. Set it ".
+            "to some positive integer N to sample every 1 / N pages.".
+            "\n\n".
+            "For most installs, the default value (1 sample per 1000 pages) ".
+            "should collect enough data to be useful without requiring much ".
+            "storage or meaningfully impacting performance. If you're ".
+            "investigating performance issues, you can adjust the rate ".
+            "in order to collect more data.")),
       $this->newOption('phabricator.developer-mode', 'bool', false)
         ->setBoolOptions(
           array(
@@ -116,12 +171,13 @@ final class PhabricatorDeveloperConfigOptions
             pht('Disable deflate compression'),
           ))
         ->setSummary(
-          pht('Toggle gzdeflate()-based compression for some caches.'))
+          pht('Toggle %s-based compression for some caches.', 'gzdeflate()'))
         ->setDescription(
           pht(
-            'Set this to false to disable the use of gzdeflate()-based '.
+            'Set this to false to disable the use of %s-based '.
             'compression in some caches. This may give you less performant '.
-            '(but more debuggable) caching.')),
+            '(but more debuggable) caching.',
+            'gzdeflate()')),
     );
   }
 }

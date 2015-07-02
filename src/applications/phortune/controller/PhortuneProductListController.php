@@ -17,7 +17,9 @@ final class PhortuneProductListController extends PhabricatorController {
     $title = pht('Product List');
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb('Products', $this->getApplicationURI('product/'));
+    $crumbs->addTextCrumb(
+      pht('Products'),
+      $this->getApplicationURI('product/'));
     $crumbs->addAction(
       id(new PHUIListItemView())
         ->setName(pht('Create Product'))
@@ -32,15 +34,13 @@ final class PhortuneProductListController extends PhabricatorController {
       $view_uri = $this->getApplicationURI(
         'product/view/'.$product->getID().'/');
 
-      $price = $product->getPriceInCents();
+      $price = $product->getPriceAsCurrency();
 
       $item = id(new PHUIObjectItemView())
         ->setObjectName($product->getID())
         ->setHeader($product->getProductName())
         ->setHref($view_uri)
-        ->addAttribute(
-          PhortuneCurrency::newFromUSDCents($price)->formatForDisplay())
-        ->addAttribute($product->getTypeName());
+        ->addAttribute($price->formatForDisplay());
 
       $product_list->addItem($item);
     }

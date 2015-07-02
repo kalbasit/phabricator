@@ -29,7 +29,8 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
   }
 
   public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
-    $query = id(new PhrequentUserTimeQuery());
+    $query = id(new PhrequentUserTimeQuery())
+      ->needPreemptingEvents(true);
 
     $user_phids = $saved->getParameter('userPHIDs');
     if ($user_phids) {
@@ -59,19 +60,13 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
     $order = $saved_query->getParameter(
       'order', PhrequentUserTimeQuery::ORDER_ENDED_DESC);
 
-    $phids = array_merge($user_phids);
-    $handles = id(new PhabricatorHandleQuery())
-      ->setViewer($this->requireViewer())
-      ->withPHIDs($phids)
-      ->execute();
-
     $form
-      ->appendChild(
+      ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setDatasource(new PhabricatorPeopleDatasource())
           ->setName('users')
           ->setLabel(pht('Users'))
-          ->setValue($handles))
+          ->setValue($user_phids))
       ->appendChild(
         id(new AphrontFormSelectControl())
           ->setLabel(pht('Ended'))
@@ -90,7 +85,7 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
     return '/phrequent/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     return array(
       'tracking' => pht('Currently Tracking'),
       'all' => pht('All Tracked'),
@@ -136,7 +131,6 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
 
     foreach ($usertimes as $usertime) {
       $item = new PHUIObjectItemView();
-
       if ($usertime->getObjectPHID() === null) {
         $item->setHeader($usertime->getNote());
       } else {
@@ -154,12 +148,10 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
       $started_date = phabricator_date($usertime->getDateStarted(), $viewer);
       $item->addIcon('none', $started_date);
 
-      if ($usertime->getDateEnded() !== null) {
-        $time_spent = $usertime->getDateEnded() - $usertime->getDateStarted();
-        $time_ended = phabricator_datetime($usertime->getDateEnded(), $viewer);
-      } else {
-        $time_spent = time() - $usertime->getDateStarted();
-      }
+      $block = new PhrequentTimeBlock(array($usertime));
+      $time_spent = $block->getTimeSpentOnObject(
+        $usertime->getObjectPHID(),
+        PhabricatorTime::getNow());
 
       $time_spent = $time_spent == 0 ? 'none' :
         phutil_format_relative_time_detailed($time_spent);
@@ -172,7 +164,7 @@ final class PhrequentSearchEngine extends PhabricatorApplicationSearchEngine {
         $item->addAttribute(
           pht(
             'Ended on %s',
-            $time_ended));
+            phabricator_datetime($usertime->getDateEnded(), $viewer)));
       } else {
         $item->addAttribute(
           pht(

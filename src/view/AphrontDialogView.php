@@ -146,6 +146,10 @@ final class AphrontDialogView extends AphrontView {
         $paragraph));
   }
 
+  public function appendForm(AphrontFormView $form) {
+    return $this->appendChild($form->buildLayoutView());
+  }
+
   public function setDisableWorkflowOnSubmit($disable_workflow_on_submit) {
     $this->disableWorkflowOnSubmit = $disable_workflow_on_submit;
     return $this;
@@ -170,7 +174,7 @@ final class AphrontDialogView extends AphrontView {
     return $this;
   }
 
-  final public function render() {
+  public function render() {
     require_celerity_resource('aphront-dialog-view-css');
 
     $buttons = array();
@@ -211,7 +215,10 @@ final class AphrontDialogView extends AphrontView {
 
     if (!$this->user) {
       throw new Exception(
-        pht('You must call setUser() when rendering an AphrontDialogView.'));
+        pht(
+          'You must call %s when rendering an %s.',
+          'setUser()',
+          __CLASS__));
     }
 
     $more = $this->class;
@@ -227,7 +234,10 @@ final class AphrontDialogView extends AphrontView {
       case self::WIDTH_DEFAULT:
         break;
       default:
-        throw new Exception("Unknown dialog width '{$this->width}'!");
+        throw new Exception(
+          pht(
+            "Unknown dialog width '%s'!",
+            $this->width));
     }
 
     if ($this->isStandalone) {
@@ -262,7 +272,7 @@ final class AphrontDialogView extends AphrontView {
           'type' => 'hidden',
           'name' => $key,
           'value' => $value,
-          'sigil' => 'aphront-dialog-application-input'
+          'sigil' => 'aphront-dialog-application-input',
         ));
     }
 
@@ -270,7 +280,8 @@ final class AphrontDialogView extends AphrontView {
       $buttons = array(phabricator_form(
         $this->user,
         $form_attributes,
-        array_merge($hidden_inputs, $buttons)));
+        array_merge($hidden_inputs, $buttons)),
+      );
     }
 
     $children = $this->renderChildren();
@@ -287,8 +298,9 @@ final class AphrontDialogView extends AphrontView {
 
     if ($errors) {
       $children = array(
-        id(new AphrontErrorView())->setErrors($errors),
-        $children);
+        id(new PHUIInfoView())->setErrors($errors),
+        $children,
+      );
     }
 
     $header = new PHUIActionHeaderView();
@@ -305,6 +317,19 @@ final class AphrontDialogView extends AphrontView {
         $this->footers);
     }
 
+    $tail = null;
+    if ($buttons || $footer) {
+      $tail = phutil_tag(
+        'div',
+        array(
+          'class' => 'aphront-dialog-tail grouped',
+        ),
+        array(
+          $buttons,
+          $footer,
+        ));
+    }
+
     $content = array(
       phutil_tag(
         'div',
@@ -317,15 +342,7 @@ final class AphrontDialogView extends AphrontView {
           'class' => 'aphront-dialog-body grouped',
         ),
         $children),
-      phutil_tag(
-        'div',
-        array(
-          'class' => 'aphront-dialog-tail grouped',
-        ),
-        array(
-          $buttons,
-          $footer,
-        )),
+      $tail,
     );
 
     if ($this->renderAsForm) {

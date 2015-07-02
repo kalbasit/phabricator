@@ -49,26 +49,28 @@ final class DrydockBlueprintViewController extends DrydockBlueprintController {
     $pager->setOffset($request->getInt('offset'));
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->setActionList($actions);
     $crumbs->addTextCrumb(pht('Blueprint %d', $blueprint->getID()));
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)
       ->addPropertyList($properties);
 
-    $xactions = id(new DrydockBlueprintTransactionQuery())
+    $field_list = PhabricatorCustomField::getObjectFields(
+      $blueprint,
+      PhabricatorCustomField::ROLE_VIEW);
+    $field_list
       ->setViewer($viewer)
-      ->withObjectPHIDs(array($blueprint->getPHID()))
-      ->execute();
+      ->readFieldsFromStorage($blueprint);
 
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($viewer);
+    $field_list->appendFieldsToPropertyList(
+      $blueprint,
+      $viewer,
+      $properties);
 
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($blueprint->getPHID())
-      ->setTransactions($xactions)
-      ->setMarkupEngine($engine);
+    $timeline = $this->buildTransactionTimeline(
+      $blueprint,
+      new DrydockBlueprintTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
     return $this->buildApplicationPage(
       array(

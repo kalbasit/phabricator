@@ -1,9 +1,8 @@
 <?php
 
-final class PhabricatorSMSDemultiplexWorker
-  extends PhabricatorSMSWorker {
+final class PhabricatorSMSDemultiplexWorker extends PhabricatorSMSWorker {
 
-  public function doWork() {
+  protected function doWork() {
     $viewer = PhabricatorUser::getOmnipotentUser();
 
     $task_data = $this->getTaskData();
@@ -23,7 +22,8 @@ final class PhabricatorSMSDemultiplexWorker
       $this->queueTask(
         'PhabricatorSMSSendWorker',
         array(
-          'smsID' => $sms->getID()));
+          'smsID' => $sms->getID(),
+        ));
     }
   }
 

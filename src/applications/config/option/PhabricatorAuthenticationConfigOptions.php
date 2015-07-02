@@ -11,13 +11,21 @@ final class PhabricatorAuthenticationConfigOptions
     return pht('Options relating to authentication.');
   }
 
+  public function getFontIcon() {
+    return 'fa-key';
+  }
+
+  public function getGroup() {
+    return 'core';
+  }
+
   public function getOptions() {
     return array(
       $this->newOption('auth.require-email-verification', 'bool', false)
         ->setBoolOptions(
           array(
             pht('Require email verification'),
-            pht("Don't require email verification")
+            pht("Don't require email verification"),
           ))
         ->setSummary(
           pht('Require email verification before a user can log in.'))
@@ -47,8 +55,8 @@ final class PhabricatorAuthenticationConfigOptions
             "registration, you can disable the queue to reduce administrative ".
             "overhead.\n\n".
             "NOTE: Before you disable the queue, make sure ".
-            "{{auth.email-domains}} is configured correctly for your ".
-            "install!")),
+            "{{auth.email-domains}} is configured correctly ".
+            "for your install!")),
       $this->newOption('auth.email-domains', 'list<string>', array())
         ->setSummary(pht('Only allow registration from particular domains.'))
         ->setDescription(
@@ -77,12 +85,11 @@ final class PhabricatorAuthenticationConfigOptions
         ->setBoolOptions(
           array(
             pht('Allow editing'),
-            pht('Prevent editing')
+            pht('Prevent editing'),
           ))
         ->setSummary(
           pht(
-            'Determines whether or not basic account information is '.
-            'editable.'))
+            'Determines whether or not basic account information is editable.'))
         ->setDescription(
           pht(
             'Is basic account information (email, real name, profile '.

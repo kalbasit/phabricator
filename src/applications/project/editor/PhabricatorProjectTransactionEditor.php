@@ -3,6 +3,14 @@
 final class PhabricatorProjectTransactionEditor
   extends PhabricatorApplicationTransactionEditor {
 
+  public function getEditorApplicationClass() {
+    return 'PhabricatorProjectApplication';
+  }
+
+  public function getEditorObjectsDescription() {
+    return pht('Projects');
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -17,6 +25,7 @@ final class PhabricatorProjectTransactionEditor
     $types[] = PhabricatorProjectTransaction::TYPE_IMAGE;
     $types[] = PhabricatorProjectTransaction::TYPE_ICON;
     $types[] = PhabricatorProjectTransaction::TYPE_COLOR;
+    $types[] = PhabricatorProjectTransaction::TYPE_LOCKED;
 
     return $types;
   }
@@ -32,7 +41,7 @@ final class PhabricatorProjectTransactionEditor
         $slugs = $object->getSlugs();
         $slugs = mpull($slugs, 'getSlug', 'getSlug');
         unset($slugs[$object->getPrimarySlug()]);
-        return $slugs;
+        return array_keys($slugs);
       case PhabricatorProjectTransaction::TYPE_STATUS:
         return $object->getStatus();
       case PhabricatorProjectTransaction::TYPE_IMAGE:
@@ -41,6 +50,8 @@ final class PhabricatorProjectTransactionEditor
         return $object->getIcon();
       case PhabricatorProjectTransaction::TYPE_COLOR:
         return $object->getColor();
+      case PhabricatorProjectTransaction::TYPE_LOCKED:
+        return (int)$object->getIsMembershipLocked();
     }
 
     return parent::getCustomTransactionOldValue($object, $xaction);
@@ -57,6 +68,7 @@ final class PhabricatorProjectTransactionEditor
       case PhabricatorProjectTransaction::TYPE_IMAGE:
       case PhabricatorProjectTransaction::TYPE_ICON:
       case PhabricatorProjectTransaction::TYPE_COLOR:
+      case PhabricatorProjectTransaction::TYPE_LOCKED:
         return $xaction->getNewValue();
     }
 
@@ -70,6 +82,7 @@ final class PhabricatorProjectTransactionEditor
     switch ($xaction->getTransactionType()) {
       case PhabricatorProjectTransaction::TYPE_NAME:
         $object->setName($xaction->getNewValue());
+        // TODO - this is really "setPrimarySlug"
         $object->setPhrictionSlug($xaction->getNewValue());
         return;
       case PhabricatorProjectTransaction::TYPE_SLUGS:
@@ -86,16 +99,8 @@ final class PhabricatorProjectTransactionEditor
       case PhabricatorProjectTransaction::TYPE_COLOR:
         $object->setColor($xaction->getNewValue());
         return;
-      case PhabricatorTransactions::TYPE_EDGE:
-        return;
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-        $object->setViewPolicy($xaction->getNewValue());
-        return;
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
-        $object->setEditPolicy($xaction->getNewValue());
-        return;
-      case PhabricatorTransactions::TYPE_JOIN_POLICY:
-        $object->setJoinPolicy($xaction->getNewValue());
+      case PhabricatorProjectTransaction::TYPE_LOCKED:
+        $object->setIsMembershipLocked($xaction->getNewValue());
         return;
     }
 
@@ -111,56 +116,13 @@ final class PhabricatorProjectTransactionEditor
 
     switch ($xaction->getTransactionType()) {
       case PhabricatorProjectTransaction::TYPE_NAME:
-        // First, remove the old and new slugs. Removing the old slug is
-        // important when changing the project's capitalization or puctuation.
-        // Removing the new slug is important when changing the project's name
-        // so that one of its secondary slugs is now the primary slug.
+        // First, add the old name as a secondary slug; this is helpful
+        // for renames and generally a good thing to do.
         if ($old !== null) {
-          $this->removeSlug($object, $old);
+          $this->addSlug($object, $old);
         }
-        $this->removeSlug($object, $new);
+        $this->addSlug($object, $new);
 
-        $new_slug = id(new PhabricatorProjectSlug())
-          ->setSlug($object->getPrimarySlug())
-          ->setProjectPHID($object->getPHID())
-          ->save();
-
-        $object->updateDatasourceTokens();
-
-        // TODO -- delete all of the below once we sever automagical project
-        // to phriction stuff
-        if ($xaction->getOldValue() === null) {
-          // Project was just created, we don't need to move anything.
-          return;
-        }
-
-        $clone_object = clone $object;
-        $clone_object->setPhrictionSlug($xaction->getOldValue());
-        $old_slug = $clone_object->getFullPhrictionSlug();
-
-        $old_document = id(new PhrictionDocument())
-          ->loadOneWhere('slug = %s', $old_slug);
-        if ($old_document && $old_document->getStatus() ==
-            PhrictionDocumentStatus::STATUS_EXISTS) {
-          $content = id(new PhrictionContent())
-            ->load($old_document->getContentID());
-          $from_editor = id(PhrictionDocumentEditor::newForSlug($old_slug))
-            ->setActor($this->getActor())
-            ->setTitle($content->getTitle())
-            ->setContent($content->getContent())
-            ->setDescription($content->getDescription());
-
-          $target_editor = id(PhrictionDocumentEditor::newForSlug(
-            $object->getFullPhrictionSlug()))
-            ->setActor($this->getActor())
-            ->setTitle($content->getTitle())
-            ->setContent($content->getContent())
-            ->setDescription($content->getDescription())
-            ->moveHere($old_document->getID(), $old_document->getPHID());
-
-          $target_document = $target_editor->getDocument();
-          $from_editor->moveAway($target_document->getID());
-        }
         return;
       case PhabricatorProjectTransaction::TYPE_SLUGS:
         $old = $xaction->getOldValue();
@@ -185,22 +147,28 @@ final class PhabricatorProjectTransactionEditor
           }
         }
 
-        $object->updateDatasourceTokens();
-
         return;
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
-      case PhabricatorTransactions::TYPE_JOIN_POLICY:
       case PhabricatorProjectTransaction::TYPE_STATUS:
       case PhabricatorProjectTransaction::TYPE_IMAGE:
       case PhabricatorProjectTransaction::TYPE_ICON:
       case PhabricatorProjectTransaction::TYPE_COLOR:
+      case PhabricatorProjectTransaction::TYPE_LOCKED:
         return;
+     }
+
+    return parent::applyCustomExternalTransaction($object, $xaction);
+  }
+
+  protected function applyBuiltinExternalTransaction(
+    PhabricatorLiskDAO $object,
+    PhabricatorApplicationTransaction $xaction) {
+
+    switch ($xaction->getTransactionType()) {
       case PhabricatorTransactions::TYPE_EDGE:
         $edge_type = $xaction->getMetadataValue('edge:type');
         switch ($edge_type) {
-          case PhabricatorEdgeConfig::TYPE_PROJ_MEMBER:
-          case PhabricatorEdgeConfig::TYPE_OBJECT_HAS_WATCHER:
+          case PhabricatorProjectProjectHasMemberEdgeType::EDGECONST:
+          case PhabricatorObjectHasWatcherEdgeType::EDGECONST:
             $old = $xaction->getOldValue();
             $new = $xaction->getNewValue();
 
@@ -210,7 +178,8 @@ final class PhabricatorProjectTransactionEditor
             // When removing members, we remove their subscription too.
             // When unwatching, we leave subscriptions, since it's fine to be
             // subscribed to a project but not be a member of it.
-            if ($edge_type == PhabricatorEdgeConfig::TYPE_PROJ_MEMBER) {
+            $edge_const = PhabricatorProjectProjectHasMemberEdgeType::EDGECONST;
+            if ($edge_type == $edge_const) {
               $rem = array_keys(array_diff_key($old, $new));
             } else {
               $rem = array();
@@ -240,17 +209,17 @@ final class PhabricatorProjectTransactionEditor
               foreach ($rem as $rem_phid) {
                 $edge_editor->removeEdge(
                   $object->getPHID(),
-                  PhabricatorEdgeConfig::TYPE_OBJECT_HAS_WATCHER,
+                  PhabricatorObjectHasWatcherEdgeType::EDGECONST,
                   $rem_phid);
               }
               $edge_editor->save();
             }
             break;
         }
-        return;
+        break;
     }
 
-    return parent::applyCustomExternalTransaction($object, $xaction);
+    return parent::applyBuiltinExternalTransaction($object, $xaction);
   }
 
   protected function validateTransaction(
@@ -348,7 +317,7 @@ final class PhabricatorProjectTransactionEditor
             $type,
             pht('Invalid'),
             pht(
-              '%d project hashtag(s) are already used: %s',
+              '%d project hashtag(s) are already used: %s.',
               count($used_slug_strs),
               implode(', ', $used_slug_strs)),
             $slug_xaction);
@@ -356,6 +325,7 @@ final class PhabricatorProjectTransactionEditor
         }
 
         break;
+
     }
 
     return $errors;
@@ -377,9 +347,15 @@ final class PhabricatorProjectTransactionEditor
           $object,
           PhabricatorPolicyCapability::CAN_EDIT);
         return;
+      case PhabricatorProjectTransaction::TYPE_LOCKED:
+        PhabricatorPolicyFilter::requireCapability(
+          $this->requireActor(),
+          newv($this->getEditorApplicationClass(), array()),
+          ProjectCanLockProjectsCapability::CAPABILITY);
+        return;
       case PhabricatorTransactions::TYPE_EDGE:
         switch ($xaction->getMetadataValue('edge:type')) {
-          case PhabricatorEdgeConfig::TYPE_PROJ_MEMBER:
+          case PhabricatorProjectProjectHasMemberEdgeType::EDGECONST:
             $old = $xaction->getOldValue();
             $new = $xaction->getNewValue();
 
@@ -398,7 +374,14 @@ final class PhabricatorProjectTransactionEditor
                 $object,
                 PhabricatorPolicyCapability::CAN_JOIN);
             } else if ($is_leave) {
-              // You don't need any capabilities to leave a project.
+              // You usually don't need any capabilities to leave a project.
+              if ($object->getIsMembershipLocked()) {
+                // you must be able to edit though to leave locked projects
+                PhabricatorPolicyFilter::requireCapability(
+                  $this->requireActor(),
+                  $object,
+                  PhabricatorPolicyCapability::CAN_EDIT);
+              }
             } else {
               // You need CAN_EDIT to change members other than yourself.
               PhabricatorPolicyFilter::requireCapability(
@@ -412,6 +395,83 @@ final class PhabricatorProjectTransactionEditor
     }
 
     return parent::requireCapabilities($object, $xaction);
+  }
+
+  protected function willPublish(PhabricatorLiskDAO $object, array $xactions) {
+    $member_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+      $object->getPHID(),
+      PhabricatorProjectProjectHasMemberEdgeType::EDGECONST);
+    $object->attachMemberPHIDs($member_phids);
+
+    return $object;
+  }
+
+  protected function shouldSendMail(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+    return true;
+  }
+
+  protected function getMailSubjectPrefix() {
+    return pht('[Project]');
+  }
+
+  protected function getMailTo(PhabricatorLiskDAO $object) {
+    return $object->getMemberPHIDs();
+  }
+
+  protected function getMailCC(PhabricatorLiskDAO $object) {
+    $all = parent::getMailCC($object);
+    return array_diff($all, $object->getMemberPHIDs());
+  }
+
+  public function getMailTagsMap() {
+    return array(
+      PhabricatorProjectTransaction::MAILTAG_METADATA =>
+        pht('Project name, hashtags, icon, image, or color changes.'),
+      PhabricatorProjectTransaction::MAILTAG_MEMBERS =>
+        pht('Project membership changes.'),
+      PhabricatorProjectTransaction::MAILTAG_WATCHERS =>
+        pht('Project watcher list changes.'),
+      PhabricatorProjectTransaction::MAILTAG_SUBSCRIBERS =>
+        pht('Project subscribers change.'),
+      PhabricatorProjectTransaction::MAILTAG_OTHER =>
+        pht('Other project activity not listed above occurs.'),
+    );
+  }
+
+  protected function buildReplyHandler(PhabricatorLiskDAO $object) {
+    return id(new ProjectReplyHandler())
+      ->setMailReceiver($object);
+  }
+
+  protected function buildMailTemplate(PhabricatorLiskDAO $object) {
+    $id = $object->getID();
+    $name = $object->getName();
+
+    return id(new PhabricatorMetaMTAMail())
+      ->setSubject("{$name}")
+      ->addHeader('Thread-Topic', "Project {$id}");
+  }
+
+  protected function buildMailBody(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+
+    $body = parent::buildMailBody($object, $xactions);
+
+    $uri = '/project/profile/'.$object->getID().'/';
+    $body->addLinkSection(
+      pht('PROJECT DETAIL'),
+      PhabricatorEnv::getProductionURI($uri));
+
+    return $body;
+  }
+
+  protected function shouldPublishFeedStory(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+    return true;
   }
 
   protected function supportsSearch() {
@@ -434,7 +494,7 @@ final class PhabricatorProjectTransactionEditor
     return parent::extractFilePHIDsFromCustomTransaction($object, $xaction);
   }
 
-  private function removeSlug(
+  private function addSlug(
     PhabricatorLiskDAO $object,
     $name) {
 
@@ -446,16 +506,13 @@ final class PhabricatorProjectTransactionEditor
       'slug = %s',
       $slug);
 
-    if (!$slug_object) {
+    if ($slug_object) {
       return;
     }
 
-    if ($slug_object->getProjectPHID() != $object->getPHID()) {
-      throw new Exception(
-        pht('Trying to remove slug owned by another project!'));
-    }
-
-    $slug_object->delete();
+    $new_slug = id(new PhabricatorProjectSlug())
+      ->setSlug($slug)
+      ->setProjectPHID($object->getPHID())
+      ->save();
   }
-
 }

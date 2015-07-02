@@ -28,7 +28,7 @@ final class ReleephProductViewController extends ReleephProductController
     }
     $this->setProduct($product);
 
-    $controller = id(new PhabricatorApplicationSearchController($request))
+    $controller = id(new PhabricatorApplicationSearchController())
       ->setQueryKey($this->queryKey)
       ->setPreface($this->renderPreface())
       ->setSearchEngine(
@@ -54,9 +54,6 @@ final class ReleephProductViewController extends ReleephProductController
       ->withPHIDs($repo_phids)
       ->execute();
     $repos = mpull($repos, null, 'getPHID');
-
-    $phids = mpull($branches, 'getCreatedByUserPHID');
-    $this->loadHandles($phids);
 
     $requests = array();
     if ($branches) {
@@ -148,7 +145,7 @@ final class ReleephProductViewController extends ReleephProductController
     return $nav;
   }
 
-  public function buildApplicationCrumbs() {
+  protected function buildApplicationCrumbs() {
     $crumbs = parent::buildApplicationCrumbs();
 
     $product = $this->getProduct();
@@ -237,10 +234,9 @@ final class ReleephProductViewController extends ReleephProductController
 
     $pushers = $product->getPushers();
     if ($pushers) {
-      $this->loadHandles($pushers);
       $properties->addProperty(
         pht('Pushers'),
-        $this->renderHandlesForPHIDs($pushers));
+        $viewer->renderHandleList($pushers));
     }
 
     return id(new PHUIObjectBoxView())

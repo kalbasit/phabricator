@@ -45,12 +45,14 @@ JX.install('Tokenizer', {
 
   properties : {
     limit : null,
-    renderTokenCallback : null
+    renderTokenCallback : null,
+    browseURI: null
   },
 
   members : {
     _containerNode : null,
     _root : null,
+    _frame: null,
     _focus : null,
     _orig : null,
     _typeahead : null,
@@ -76,6 +78,21 @@ JX.install('Tokenizer', {
       this._tokens = [];
       this._tokenMap = {};
 
+      try {
+        this._frame = JX.DOM.findAbove(this._orig, 'div', 'tokenizer-frame');
+      } catch (e) {
+        // Ignore, this tokenizer doesn't have a frame.
+      }
+
+      if (this._frame) {
+        JX.DOM.alterClass(this._frame, 'has-browse', !!this.getBrowseURI());
+        JX.DOM.listen(
+          this._frame,
+          'click',
+          'tokenizer-browse',
+          JX.bind(this, this._onbrowse));
+      }
+
       var focus = this.buildInput(this._orig.value);
       this._focus = focus;
 
@@ -88,7 +105,7 @@ JX.install('Tokenizer', {
 
       JX.DOM.listen(
         focus,
-        ['click', 'focus', 'blur', 'keydown', 'keypress'],
+        ['click', 'focus', 'blur', 'keydown', 'keypress', 'paste'],
         null,
         JX.bind(this, this.handleEvent));
 
@@ -222,7 +239,10 @@ JX.install('Tokenizer', {
         this._typeahead.updatePlaceholder();
       } else if (e.getType() == 'focus') {
         this._didfocus();
+      } else if (e.getType() == 'paste') {
+        setTimeout(JX.bind(this, this._redraw), 0);
       }
+
     },
 
     refresh : function() {
@@ -247,7 +267,6 @@ JX.install('Tokenizer', {
       }
       this._lastvalue = focus.value;
 
-      var root  = this._root;
       var metrics = JX.DOM.textMetrics(
         this._focus,
         'jx-tokenizer-metrics');
@@ -329,16 +348,22 @@ JX.install('Tokenizer', {
       }, '\u00d7'); // U+00D7 multiplication sign
 
       var display_token = value;
-      var render_callback = this.getRenderTokenCallback();
-      if (render_callback) {
-        display_token = render_callback(value, key);
-      }
 
-      return JX.$N('a', {
+      var attrs = {
         className: 'jx-tokenizer-token',
         sigil: 'token',
         meta: {key: key}
-      }, [display_token, input, remove]);
+      };
+      var container = JX.$N('a', attrs);
+
+      var render_callback = this.getRenderTokenCallback();
+      if (render_callback) {
+        display_token = render_callback(value, key, container);
+      }
+
+      JX.DOM.setContent(container, [display_token, input, remove]);
+
+      return container;
     },
 
     getTokens : function() {
@@ -350,9 +375,6 @@ JX.install('Tokenizer', {
     },
 
     _onkeydown : function(e) {
-      var focus = this._focus;
-      var root = this._root;
-
       var raw = e.getRawEvent();
       if (raw.ctrlKey || raw.metaKey || raw.altKey) {
         return;
@@ -430,6 +452,28 @@ JX.install('Tokenizer', {
         false);
       this._focus.value = '';
       this._redraw();
+    },
+
+    _onbrowse: function(e) {
+      e.kill();
+
+      var uri = this.getBrowseURI();
+      if (!uri) {
+        return;
+      }
+
+      new JX.Workflow(uri, {exclude: JX.keys(this.getTokens()).join(',')})
+        .setHandler(
+          JX.bind(this, function(r) {
+            var source = this._typeahead.getDatasource();
+
+            source.addResult(r.token);
+            var result = source.getResult(r.key);
+
+            this.addToken(r.key, result.name);
+            this.focus();
+          }))
+        .start();
     }
 
   }

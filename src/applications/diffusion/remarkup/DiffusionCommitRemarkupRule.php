@@ -1,6 +1,6 @@
 <?php
 
-final class DiffusionCommitRemarkupRule extends PhabricatorRemarkupRuleObject {
+final class DiffusionCommitRemarkupRule extends PhabricatorObjectRemarkupRule {
 
   protected function getObjectNamePrefix() {
     return '';
@@ -22,7 +22,6 @@ final class DiffusionCommitRemarkupRule extends PhabricatorRemarkupRuleObject {
       ->withIdentifiers($ids);
 
     $query->execute();
-
     return $query->getIdentifierMap();
   }
 

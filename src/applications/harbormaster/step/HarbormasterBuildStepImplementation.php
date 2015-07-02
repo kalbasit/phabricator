@@ -1,10 +1,15 @@
 <?php
 
-abstract class HarbormasterBuildStepImplementation {
+/**
+ * @task autotarget Automatic Targets
+ */
+abstract class HarbormasterBuildStepImplementation extends Phobject {
+
+  private $settings;
 
   public static function getImplementations() {
     return id(new PhutilSymbolLoader())
-      ->setAncestorClass('HarbormasterBuildStepImplementation')
+      ->setAncestorClass(__CLASS__)
       ->loadObjects();
   }
 
@@ -72,7 +77,7 @@ abstract class HarbormasterBuildStepImplementation {
    * Loads the settings for this build step implementation from a build
    * step or target.
    */
-  public final function loadSettings($build_object) {
+  final public function loadSettings($build_object) {
     $this->settings = $build_object->getDetails();
     return $this;
   }
@@ -98,51 +103,65 @@ abstract class HarbormasterBuildStepImplementation {
     return array();
   }
 
-  /**
-   * Returns a list of all artifacts made available by previous build steps.
-   */
-  public static function loadAvailableArtifacts(
-    HarbormasterBuildPlan $build_plan,
-    HarbormasterBuildStep $current_build_step,
-    $artifact_type) {
+  public function getDependencies(HarbormasterBuildStep $build_step) {
+    $dependencies = $build_step->getDetail('dependsOn', array());
 
-    $build_steps = $build_plan->loadOrderedBuildSteps();
+    $inputs = $build_step->getStepImplementation()->getArtifactInputs();
+    $inputs = ipull($inputs, null, 'key');
 
-    return self::getAvailableArtifacts(
-      $build_plan,
-      $build_steps,
-      $current_build_step,
-      $artifact_type);
+    $artifacts = $this->getAvailableArtifacts(
+      $build_step->getBuildPlan(),
+      $build_step,
+      null);
+
+    foreach ($artifacts as $key => $type) {
+      if (!array_key_exists($key, $inputs)) {
+        unset($artifacts[$key]);
+      }
+    }
+
+    $artifact_steps = ipull($artifacts, 'step');
+    $artifact_steps = mpull($artifact_steps, 'getPHID');
+
+    $dependencies = array_merge($dependencies, $artifact_steps);
+
+    return $dependencies;
   }
 
   /**
-   * Returns a list of all artifacts made available by previous build steps.
+   * Returns a list of all artifacts made available in the build plan.
    */
   public static function getAvailableArtifacts(
     HarbormasterBuildPlan $build_plan,
-    array $build_steps,
-    HarbormasterBuildStep $current_build_step,
+    $current_build_step,
     $artifact_type) {
 
-    $previous_implementations = array();
-    foreach ($build_steps as $build_step) {
-      if ($build_step->getPHID() === $current_build_step->getPHID()) {
-        break;
-      }
-      $previous_implementations[] = $build_step->getStepImplementation();
-    }
+    $steps = id(new HarbormasterBuildStepQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withBuildPlanPHIDs(array($build_plan->getPHID()))
+      ->execute();
 
-    $artifact_arrays = mpull($previous_implementations, 'getArtifactOutputs');
     $artifacts = array();
-    foreach ($artifact_arrays as $array) {
+
+    $artifact_arrays = array();
+    foreach ($steps as $step) {
+      if ($current_build_step !== null &&
+        $step->getPHID() === $current_build_step->getPHID()) {
+
+        continue;
+      }
+
+      $implementation = $step->getStepImplementation();
+      $array = $implementation->getArtifactOutputs();
       $array = ipull($array, 'type', 'key');
       foreach ($array as $name => $type) {
         if ($type !== $artifact_type && $artifact_type !== null) {
           continue;
         }
-        $artifacts[$name] = $type;
+        $artifacts[$name] = array('type' => $type, 'step' => $step);
       }
     }
+
     return $artifacts;
   }
 
@@ -206,6 +225,47 @@ abstract class HarbormasterBuildStepImplementation {
     }
 
     return (bool)$target->getDetail('builtin.wait-for-message');
+  }
+
+  protected function shouldAbort(
+    HarbormasterBuild $build,
+    HarbormasterBuildTarget $target) {
+
+    return $build->getBuildGeneration() !== $target->getBuildGeneration();
+  }
+
+  protected function resolveFuture(
+    HarbormasterBuild $build,
+    HarbormasterBuildTarget $target,
+    Future $future) {
+
+    $futures = new FutureIterator(array($future));
+    foreach ($futures->setUpdateInterval(5) as $key => $future) {
+      if ($future === null) {
+        $build->reload();
+        if ($this->shouldAbort($build, $target)) {
+          throw new HarbormasterBuildAbortedException();
+        }
+      } else {
+        return $future->resolve();
+      }
+    }
+  }
+
+
+/* -(  Automatic Targets  )-------------------------------------------------- */
+
+
+  public function getBuildStepAutotargetStepKey() {
+    return null;
+  }
+
+  public function getBuildStepAutotargetPlanKey() {
+    throw new PhutilMethodNotImplementedException();
+  }
+
+  public function shouldRequireAutotargeting() {
+    return false;
   }
 
 }

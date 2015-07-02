@@ -19,9 +19,10 @@ final class PhabricatorXHPASTViewFrameController
           'src'         => '/xhpast/frameset/'.$id.'/',
           'frameborder' => '0',
           'style'       => 'width: 100%; height: 800px;',
-        '')),
+        '',
+      )),
       array(
-        'title' => 'XHPAST View',
+        'title' => pht('XHPAST View'),
       ));
   }
 }

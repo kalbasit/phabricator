@@ -29,38 +29,20 @@ final class LegalpadDocumentManageController extends LegalpadController {
       return new Aphront404Response();
     }
 
-    $xactions = id(new LegalpadTransactionQuery())
-      ->setViewer($user)
-      ->withObjectPHIDs(array($document->getPHID()))
-      ->execute();
-
     $subscribers = PhabricatorSubscribersQuery::loadSubscribersForPHID(
       $document->getPHID());
 
     $document_body = $document->getDocumentBody();
-    $phids = array();
-    $phids[] = $document_body->getCreatorPHID();
-    foreach ($subscribers as $subscriber) {
-      $phids[] = $subscriber;
-    }
-    foreach ($document->getContributors() as $contributor) {
-      $phids[] = $contributor;
-    }
-    $this->loadHandles($phids);
 
     $engine = id(new PhabricatorMarkupEngine())
       ->setViewer($user);
     $engine->addObject(
       $document_body,
       LegalpadDocumentBody::MARKUP_FIELD_TEXT);
-    foreach ($xactions as $xaction) {
-      if ($xaction->getComment()) {
-        $engine->addObject(
-          $xaction->getComment(),
-          PhabricatorApplicationTransactionComment::MARKUP_FIELD_COMMENT);
-      }
-    }
-    $engine->process();
+    $timeline = $this->buildTransactionTimeline(
+      $document,
+      new LegalpadTransactionQuery(),
+      $engine);
 
     $title = $document_body->getTitle();
 
@@ -74,16 +56,9 @@ final class LegalpadDocumentManageController extends LegalpadController {
 
     $comment_form_id = celerity_generate_unique_node_id();
 
-    $xaction_view = id(new LegalpadTransactionView())
-      ->setUser($this->getRequest()->getUser())
-      ->setObjectPHID($document->getPHID())
-      ->setTransactions($xactions)
-      ->setMarkupEngine($engine);
-
     $add_comment = $this->buildAddCommentView($document, $comment_form_id);
 
     $crumbs = $this->buildApplicationCrumbs($this->buildSideNav());
-    $crumbs->setActionList($actions);
     $crumbs->addTextCrumb(
       $document->getMonogram(),
       '/'.$document->getMonogram());
@@ -97,7 +72,7 @@ final class LegalpadDocumentManageController extends LegalpadController {
     $content = array(
       $crumbs,
       $object_box,
-      $xaction_view,
+      $timeline,
       $add_comment,
     );
 
@@ -183,21 +158,19 @@ final class LegalpadDocumentManageController extends LegalpadController {
 
     $properties->addProperty(
       pht('Updated By'),
-      $this->getHandle(
-        $document->getDocumentBody()->getCreatorPHID())->renderLink());
+      $user->renderHandle($document->getDocumentBody()->getCreatorPHID()));
 
     $properties->addProperty(
       pht('Versions'),
       $document->getVersions());
 
-    $contributor_view = array();
-    foreach ($document->getContributors() as $contributor) {
-      $contributor_view[] = $this->getHandle($contributor)->renderLink();
+    if ($document->getContributors()) {
+      $properties->addProperty(
+        pht('Contributors'),
+        $user
+          ->renderHandleList($document->getContributors())
+          ->setAsInline(true));
     }
-    $contributor_view = phutil_implode_html(', ', $contributor_view);
-    $properties->addProperty(
-      pht('Contributors'),
-      $contributor_view);
 
     $properties->invokeWillRenderEvent();
 
