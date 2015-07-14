@@ -84,11 +84,13 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
           try {
             $jira_key = $xobj->getObjectID();
 
-            if (self::shouldPostComment())
+            if (self::shouldPostComment()) {
               $this->postComment($account, $jira_key);
+            }
 
-            if (self::shouldPostLink())
+            if (self::shouldPostLink()) {
               $this->postLink($account, $jira_key);
+            }
 
             break;
           } catch (HTTPFutureResponseStatus $ex) {
@@ -202,7 +204,8 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       $account,
       'rest/api/2/issue/'.$jira_key.'/remotelink',
       'POST',
-      // format documented at https://developer.atlassian.com/display/JIRADEV/Fields+in+Remote+Issue+Links
+
+      // format documented at http://bit.ly/1K5T0Li
       array(
         'globalId' => 'phabricatorPhid='.$object->getPHID(),
         'application' => array(
