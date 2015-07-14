@@ -185,7 +185,11 @@ final class PhabricatorApplicationSearchController
       $title = pht('Advanced Search');
     }
 
-    $box = new PHUIObjectBoxView();
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title);
+
+    $box = id(new PHUIObjectBoxView())
+      ->setHeader($header);
 
     if ($run_query || $named_query) {
       $box->setShowHide(
@@ -213,29 +217,23 @@ final class PhabricatorApplicationSearchController
 
         $objects = $engine->executeQuery($query, $pager);
 
-        // TODO: To support Dashboard panels, rendering is moving into
-        // SearchEngines. Move it all the way in and then get rid of this.
+        $engine->setRequest($request);
+        $list = $engine->renderResults($objects, $saved_query);
 
-        $interface = 'PhabricatorApplicationSearchResultsControllerInterface';
-        if ($parent instanceof $interface) {
-          $list = $parent->renderResultsList($objects, $saved_query);
-        } else {
-          $engine->setRequest($request);
-
-          $list = $engine->renderResults(
-            $objects,
-            $saved_query);
+        if (!($list instanceof PhabricatorApplicationSearchResultView)) {
+          throw new Exception(
+            pht(
+              'SearchEngines must render a "%s" object, but this engine '.
+              '(of class "%s") rendered something else.',
+              'PhabricatorApplicationSearchResultView',
+              get_class($engine)));
         }
 
-        $header = id(new PHUIHeaderView())
-          ->setHeader($title);
         if ($list->getActions()) {
           foreach ($list->getActions() as $action) {
             $header->addActionLink($action);
           }
         }
-
-        $box->setHeader($header);
 
         if ($list->getObjectList()) {
           $box->setObjectList($list->getObjectList());
@@ -267,8 +265,6 @@ final class PhabricatorApplicationSearchController
           'This query specifies an invalid parameter. Review the '.
           'query parameters and correct errors.');
       }
-    } else {
-      $box->setHeaderText($title);
     }
 
     if ($errors) {

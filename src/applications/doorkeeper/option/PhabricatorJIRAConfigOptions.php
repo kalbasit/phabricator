@@ -42,7 +42,7 @@ final class PhabricatorJIRAConfigOptions
           pht(
             'JIRA issues can have Remote Links to web artifacts related to '.
             'the given issue. This option adds the revision under "implement '.
-            'in" under the Issue Links section of the JIRA ticket.'))
+            'in" under the Issue Links section of the JIRA ticket.')),
     );
   }
 

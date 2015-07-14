@@ -187,7 +187,7 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       'rest/api/2/issue/'.$jira_key.'/comment',
       'POST',
       array(
-        'body' => $this->renderStoryText()
+        'body' => $this->renderStoryText(),
       ))->resolveJSON();
   }
 
@@ -219,7 +219,7 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
             'title'     => 'Revision',
           ),
           'status' => array(
-            'resolved' => $publisher->isObjectClosed($object)
+            'resolved' => $publisher->isObjectClosed($object),
           ),
         ),
       ))->resolveJSON();

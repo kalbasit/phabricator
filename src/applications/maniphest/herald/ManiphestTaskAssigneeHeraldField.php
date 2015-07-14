@@ -18,7 +18,13 @@ final class ManiphestTaskAssigneeHeraldField
   }
 
   public function getHeraldFieldValueType($condition) {
-    return HeraldAdapter::VALUE_USER;
+    switch ($condition) {
+      case HeraldAdapter::CONDITION_EXISTS:
+      case HeraldAdapter::CONDITION_NOT_EXISTS:
+        return HeraldAdapter::VALUE_NONE;
+      default:
+        return HeraldAdapter::VALUE_USER;
+    }
   }
 
 }
